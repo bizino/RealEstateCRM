@@ -44,11 +44,13 @@ The API reads its settings from `server/.env`, see [`server/.env.example`](serve
 
 ```bash
 # API: integration tests against an in-memory MongoDB (the MongoDB binary is downloaded on the first run)
-cd server && npm install && npm test
+cd server && npm ci && npm test
 
 # Web client: unit tests and production build
-cd Client && npm install && CI=true npm test && npm run build
+cd Client && npm ci && CI=true npm test && npm run build
 ```
+
+`npm ci` installs the exact versions from the committed `package-lock.json` files. Use it for deployments too: without the lock files a fresh install picks the latest versions, which is how the client build broke (typescript 7, apexcharts 3.50+).
 
 The same checks run on every pull request (`.github/workflows/tests.yml`).
 
