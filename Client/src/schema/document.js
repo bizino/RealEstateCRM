@@ -1,10 +1,8 @@
-import * as yup from 'yup'
+import * as yup from 'yup';
 
-
-// Define the yup schema for the main document
-export const documentSchema = yup.object().shape({
-    folderName: yup.string().required('Folder Name is required'),
-    filename: yup.string().min(2, 'File Name Must Be At Least 2 Characters'),
-    createBy: yup.string().required()
+// Upload of documents into a folder (a custom name is only used for a single file)
+export const documentSchema = yup.object({
+    folderName: yup.string().trim().required('Vui lòng nhập tên thư mục').max(100, 'Tên thư mục tối đa 100 ký tự'),
+    filename: yup.string().trim().nullable().min(2, 'Tên tài liệu phải có ít nhất 2 ký tự').max(200, 'Tên tài liệu tối đa 200 ký tự'),
+    files: yup.array().required('Vui lòng chọn ít nhất một tệp').min(1, 'Vui lòng chọn ít nhất một tệp'),
 });
-

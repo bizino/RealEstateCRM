@@ -1,96 +1,77 @@
-import { CloseIcon } from '@chakra-ui/icons';
-import { Button, FormLabel, Grid, GridItem, IconButton, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, ModalOverlay, Text } from '@chakra-ui/react';
-import Spinner from 'components/spinner/Spinner';
+import { Alert, AlertIcon, Stack, Text } from '@chakra-ui/react';
+import FormFields from 'components/crm/FormFields';
+import FormModal from 'components/crm/FormModal';
 import { useFormik } from 'formik';
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { changePasswordSchema } from 'schema';
-import { putApi } from 'services/api';
+import { apiPut, currentUser } from 'services/crm';
+import PasswordInput from './PasswordInput';
 
-const ChangePassword = (props) => {
-    const { onClose, isOpen, id } = props
-    // Users confirm their current password, an admin resetting another user's password does not
-    const isSelf = JSON.parse(localStorage.getItem('user'))?._id === id
-    const [isLoding, setIsLoding] = useState(false)
+const passwordField = (name, label, autoComplete, extra = {}) => ({
+    name,
+    label,
+    required: true,
+    ...extra,
+    render: (form) => (
+        <PasswordInput name={name} value={form.values[name]} onChange={form.handleChange} onBlur={form.handleBlur} autoComplete={autoComplete} />
+    ),
+});
+
+// Change your own password (the current one is asked), or for admins, reset
+// the password of an employee. id: the user whose password changes, name: their
+// name shown in the title when it is someone else.
+export default function ChangePassword({ isOpen, onClose, id, name }) {
+    const isSelf = currentUser()?._id === id;
+    const validationSchema = useMemo(() => changePasswordSchema(isSelf), [isSelf]);
 
     const formik = useFormik({
-        initialValues: {
-            currentPassword: '',
-            newPassword: '',
-            confirmPassword: '',
-        },
-        validationSchema: changePasswordSchema(isSelf),
-        onSubmit: () => {
-            ChangeData();
+        initialValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
+        validationSchema,
+        onSubmit: async (values, { resetForm }) => {
+            try {
+                await apiPut(`api/user/change-password/${id}`, isSelf
+                    ? { currentPassword: values.currentPassword, newPassword: values.newPassword }
+                    : { newPassword: values.newPassword });
+                toast.success(isSelf ? 'Đã đổi mật khẩu' : `Đã đặt lại mật khẩu${name ? ` cho ${name}` : ''}`);
+                resetForm();
+                onClose();
+            } catch (e) {
+                toast.error(e.message);
+            }
         },
     });
-    const { errors, touched, values, handleBlur, handleChange, handleSubmit, resetForm } = formik
 
-    const handleClose = () => {
-        resetForm()
-        onClose(false)
-    }
-
-    const ChangeData = async () => {
-        try {
-            setIsLoding(true)
-            let response = await putApi(`api/user/change-password/${id}`, { currentPassword: values.currentPassword, newPassword: values.newPassword })
-            if (response && response.status === 200) {
-                toast.success('Password changed successfully')
-                handleClose()
-            } else {
-                toast.error(response.response?.data?.message)
-            }
-        } catch (e) {
-            console.log(e);
-        }
-        finally {
-            setIsLoding(false)
-        }
+    const close = () => {
+        formik.resetForm();
+        onClose();
     };
 
-    const passwordField = (name, label) => (
-        <GridItem colSpan={{ base: 12 }}>
-            <FormLabel display='flex' ms='4px' fontSize='sm' fontWeight='500' mb='8px'>
-                {label}<Text color={"red"}>*</Text>
-            </FormLabel>
-            <Input
-                fontSize='sm'
-                type='password'
-                autoComplete={name === 'currentPassword' ? 'current-password' : 'new-password'}
-                onChange={handleChange} onBlur={handleBlur}
-                value={values[name]}
-                name={name}
-                placeholder={label}
-                fontWeight='500'
-                borderColor={errors[name] && touched[name] ? "red.300" : null}
-            />
-            <Text mb='10px' color={'red'}> {errors[name] && touched[name] && errors[name]}</Text>
-        </GridItem>
-    )
+    const fields = [
+        ...(isSelf ? [passwordField('currentPassword', 'Mật khẩu hiện tại', 'current-password')] : []),
+        passwordField('newPassword', 'Mật khẩu mới', 'new-password', { help: 'Ít nhất 6 ký tự' }),
+        passwordField('confirmPassword', 'Nhập lại mật khẩu mới', 'new-password'),
+    ];
 
     return (
-        <Modal isOpen={isOpen} isCentered>
-            <ModalOverlay />
-            <ModalContent>
-                <ModalHeader justifyContent='space-between' display='flex' >
-                    Change Password
-                    <IconButton onClick={handleClose} icon={<CloseIcon />} />
-                </ModalHeader>
-                <ModalBody>
-                    <Grid templateColumns="repeat(12, 1fr)" gap={3}>
-                        {isSelf && passwordField('currentPassword', 'Current Password')}
-                        {passwordField('newPassword', 'New Password')}
-                        {passwordField('confirmPassword', 'Confirm New Password')}
-                    </Grid>
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant='brand' disabled={isLoding ? true : false} onClick={handleSubmit}>{isLoding ? <Spinner /> : 'Change Password'}</Button>
-                    <Button onClick={handleClose}>close</Button>
-                </ModalFooter>
-            </ModalContent>
-        </Modal>
-    )
+        <FormModal
+            isOpen={isOpen}
+            onClose={close}
+            title={isSelf ? 'Đổi mật khẩu' : `Đặt lại mật khẩu${name ? ` cho ${name}` : ''}`}
+            onSubmit={formik.handleSubmit}
+            isSubmitting={formik.isSubmitting}
+            submitLabel={isSelf ? 'Đổi mật khẩu' : 'Đặt lại mật khẩu'}
+            size="lg"
+        >
+            <Stack spacing={4}>
+                {!isSelf && (
+                    <Alert status="info" borderRadius="md" fontSize="sm">
+                        <AlertIcon />
+                        <Text>Nhân viên sẽ đăng nhập bằng mật khẩu mới. Hãy gửi mật khẩu này cho nhân viên qua kênh riêng tư và nhắc họ đổi lại sau khi đăng nhập.</Text>
+                    </Alert>
+                )}
+                <FormFields formik={formik} fields={fields} columns={1} />
+            </Stack>
+        </FormModal>
+    );
 }
-
-export default ChangePassword

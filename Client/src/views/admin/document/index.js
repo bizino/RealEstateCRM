@@ -1,189 +1,197 @@
-import { Button, Flex, FormLabel, Grid, GridItem, Heading, Input, List, ListItem, Text, VStack, useDisclosure } from '@chakra-ui/react';
+import {
+    Box, Button, Flex, Icon, Input, InputGroup, InputLeftElement, Spinner, Stack, Text, useDisclosure,
+} from '@chakra-ui/react';
 import FolderTreeView from 'components/FolderTreeView/folderTreeView';
 import Card from 'components/card/Card';
-import { HSeparator } from 'components/separator/Separator';
-import Spinner from 'components/spinner/Spinner';
-import { constant } from 'constant';
-import { useFormik } from 'formik';
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import ConfirmDialog from 'components/crm/ConfirmDialog';
+import useApiData from 'hooks/useApiData';
+import { useCallback, useMemo, useState } from 'react';
+import { MdCloudUpload, MdSearch } from 'react-icons/md';
 import { toast } from 'react-toastify';
-import { documentSchema } from 'schema';
-import { deleteApi, getApi } from 'services/api';
-import Upload from './component/Upload';
-import { postApi } from 'services/api';
+import { apiDelete, currentUser } from 'services/crm';
+import { displayName, formatPhone, parseDate, searchText, userName } from 'utils/format';
+import LinkModal from './component/LinkModal';
+import UploadModal from './component/UploadModal';
 
+const asList = (data) => (Array.isArray(data) ? data : []);
+const timeOf = (file) => parseDate(file.createOn)?.getTime() || 0;
+const byName = (a, b) => String(a || '').localeCompare(String(b || ''), 'vi', { sensitivity: 'base', numeric: true });
 
-const Index = () => {
+export default function Documents() {
+    const me = currentUser();
+    const isAdmin = me?.role === 'admin';
+    const myName = userName(me);
+    const { data, isLoading, reload } = useApiData('api/document/');
+    const upload = useDisclosure();
+    const link = useDisclosure();
+    const remove = useDisclosure();
+    const [uploadFolder, setUploadFolder] = useState('');
+    // File being linked or deleted
+    const [target, setTarget] = useState(null);
+    const [query, setQuery] = useState('');
 
-    const [data, setData] = useState([])
-    const { isOpen, onOpen, onClose } = useDisclosure();
-    const user = JSON.parse(localStorage.getItem("user"))
-    const [isLoding, setIsLoding] = useState(false)
-    const [linkDocument, setLinkDocument] = useState(false)
+    // Folders in alphabetical order, newest files first
+    const folders = useMemo(() => asList(data)
+        .map((folder) => ({ ...folder, files: [...(folder.files || [])].sort((a, b) => timeOf(b) - timeOf(a)) }))
+        .sort((a, b) => byName(a.folderName, b.folderName)), [data]);
+    const folderNames = useMemo(() => [...new Set(folders.map((folder) => folder.folderName).filter(Boolean))], [folders]);
+    const fileCount = folders.reduce((sum, folder) => sum + folder.files.length, 0);
 
-    const fetchData = async () => {
-        setIsLoding(true)
-        let result = await getApi(user.role === 'admin' ? 'api/document' : `api/document?createBy=${user._id}`);
-        setData(result?.data);
-        setIsLoding(false)
-    }
+    // Names of the linked customers: the lists are only loaded when needed
+    const hasContactLinks = folders.some((folder) => folder.files.some((file) => file.linkContact));
+    const hasLeadLinks = folders.some((folder) => folder.files.some((file) => file.linkLead));
+    const { data: contactData, isLoading: loadingContacts } = useApiData('api/contact/', { enabled: link.isOpen || hasContactLinks });
+    const { data: leadData, isLoading: loadingLeads } = useApiData('api/lead/', { enabled: link.isOpen || hasLeadLinks });
+    const contacts = useMemo(() => asList(contactData), [contactData]);
+    const leads = useMemo(() => asList(leadData), [leadData]);
 
-    const initialValues = {
-        folderName: '',
-        files: '',
-        filename: '',
-        createBy: user._id
+    const linkedNames = useMemo(() => {
+        const names = new Map();
+        contacts.forEach((contact) => names.set(`contact:${contact._id}`, displayName(contact) || formatPhone(contact.phoneNumber)));
+        leads.forEach((lead) => names.set(`lead:${lead._id}`, lead.leadName || formatPhone(lead.leadPhoneNumber)));
+        return names;
+    }, [contacts, leads]);
+
+    const linkedName = useCallback((file) => {
+        if (file.linkContact) return linkedNames.get(`contact:${file.linkContact}`) || '';
+        if (file.linkLead) return linkedNames.get(`lead:${file.linkLead}`) || '';
+        return '';
+    }, [linkedNames]);
+
+    // Search ignoring accents in the folder name, the file name and the linked customer
+    const visibleFolders = useMemo(() => {
+        const words = searchText(query).split(' ').filter(Boolean);
+        if (!words.length) return folders;
+        const matches = (text) => {
+            const value = searchText(text);
+            return words.every((word) => value.includes(word));
+        };
+        return folders
+            .map((folder) => ({ ...folder, files: folder.files.filter((file) => matches(`${folder.folderName} ${file.fileName} ${linkedName(file)}`)) }))
+            .filter((folder) => folder.files.length);
+    }, [folders, query, linkedName]);
+
+    const openUpload = (folderName = '') => {
+        setUploadFolder(typeof folderName === 'string' ? folderName : '');
+        upload.onOpen();
+    };
+    const openLink = (file) => {
+        setTarget(file);
+        link.onOpen();
+    };
+    const openDelete = (file) => {
+        setTarget(file);
+        remove.onOpen();
     };
 
-    const formik = useFormik({
-        initialValues: initialValues,
-        validationSchema: documentSchema,
-        onSubmit: (values, { resetForm }) => {
-            AddData();
-        },
-    });
-    const { errors, touched, values, handleBlur, handleChange, handleSubmit, setFieldValue, resetForm } = formik
-    const navigate = useNavigate()
+    // Admins see the folders of everyone: uploads always go to their own folders
+    const canUploadTo = (folder) => !isAdmin || (folder.createByName && folder.createByName === myName);
 
-    const download = async (data) => {
-        if (data) {
-            let result = await getApi(`api/document/download/`, data)
-            if (result && result.status === 200) {
-                window.open(`${constant.baseUrl}api/document/download/${data}`)
-                toast.success('file Download successful')
-            } else if (result && result.response.status === 404) {
-                toast.error('file Not Found')
-            }
-        }
-    }
-    const deleteFile = async (data) => {
-        if (data) {
-            let result = await deleteApi(`api/document/delete/`, data)
-            if (result && result.status === 200) {
-                fetchData()
-            }
-        }
-    }
-
-    const AddData = async () => {
+    const deleteDocument = async () => {
         try {
-            setIsLoding(true)
-            const formData = new FormData();
-            formData?.append('folderName', values.folderName);
-            formData?.append('createBy', values.createBy);
-            formData?.append('filename', values.filename);
-
-            // Append files to the formData
-            values.files.forEach((file) => {
-                formData?.append('files', file);
-            });
-
-            let response = await postApi('api/document/add', formData);
-            if (response && response.status === 200) {
-                fetchData();
-                formik.resetForm();
-            }
+            await apiDelete(`api/document/delete/${target._id}`);
+            toast.success('Đã xóa tài liệu');
+            reload();
         } catch (e) {
-            console.log(e);
-        }
-        finally {
-            setIsLoding(false)
+            toast.error(e.message);
+            throw e;
         }
     };
 
-    useEffect(() => {
-        fetchData()
-    }, [linkDocument, handleSubmit])
+    const renderContent = () => {
+        if (isLoading && !folders.length) return <Flex justify="center" py={10}><Spinner /></Flex>;
+        if (!folders.length) {
+            return (
+                <Stack align="center" spacing={3} py={10} textAlign="center">
+                    <Icon as={MdCloudUpload} boxSize={12} color="gray.300" />
+                    <Text color="gray.500">Chưa có tài liệu nào. Bấm “Tải lên” để lưu hợp đồng, giấy tờ của khách.</Text>
+                </Stack>
+            );
+        }
+        if (!visibleFolders.length) return <Text textAlign="center" color="gray.500" py={10}>Không tìm thấy tài liệu phù hợp</Text>;
+        return (
+            <Stack spacing={3}>
+                {visibleFolders.map((folder) => (
+                    <FolderTreeView
+                        key={folder._id}
+                        name={folder.folderName}
+                        item={folder}
+                        isOpen={Boolean(query.trim())}
+                        showOwner={isAdmin}
+                        onUpload={canUploadTo(folder) ? openUpload : undefined}
+                    >
+                        {folder.files.map((file) => (
+                            <FolderTreeView
+                                key={file._id}
+                                isFile
+                                data={file}
+                                name={file.fileName}
+                                linkedName={linkedName(file)}
+                                onLink={openLink}
+                                onDelete={openDelete}
+                            />
+                        ))}
+                    </FolderTreeView>
+                ))}
+            </Stack>
+        );
+    };
 
     return (
-        <div>
-            <Grid templateColumns="repeat(12, 1fr)" mb={3} gap={2}>
-                <GridItem colSpan={{ base: 12, md: 7 }}  >
-                    <Card minH={'20em'}>
-                        <Heading size="lg" mb={4} >
-                            File Explorer
-                        </Heading>
-                        <HSeparator />
-                        <VStack mt={4} alignItems="flex-start">
-                            {isLoding ?
-                                <Flex justifyContent={'center'} alignItems={'center'} width="100%" >
-                                    <Spinner />
-                                </Flex>
-                                : data?.length === 0 ? (
-                                    <Text textAlign={'center'} width="100%" fontSize="sm" fontWeight="700">
-                                        -- No Document Found --
-                                    </Text>
-                                ) : data?.map((item) => (
-                                    <FolderTreeView name={item.folderName} item={item}>
-                                        {item?.files?.map((file) => (
-                                            <FolderTreeView download={download} setLinkDocument={setLinkDocument} deleteFile={deleteFile} data={file} name={file.fileName} isFile />
-                                        ))}
-                                    </FolderTreeView>
-                                ))}
-                        </VStack>
-                    </Card>
-                </GridItem>
-                <GridItem colSpan={{ base: 12, md: 5 }} colStart={{ base: 1, md: 8 }} >
-                    <Card >
-                        <GridItem colSpan={{ base: 12 }} >
-                            <FormLabel display='flex' ms='4px' fontSize='sm' fontWeight='500' mb='8px'>
-                                Folder Name<Text color={"red"}>*</Text>
-                            </FormLabel>
+        <>
+            <Card px={{ base: 3, md: 5 }} py={{ base: 4, md: 5 }}>
+                <Flex mb={4} gap={3} direction={{ base: 'column', lg: 'row' }} align={{ base: 'stretch', lg: 'center' }} justify="space-between">
+                    <Box>
+                        <Text fontSize={{ base: 'lg', md: '22px' }} fontWeight="700" lineHeight="1.2">
+                            Tài liệu <Text as="span" color="gray.400" fontWeight="600">({fileCount})</Text>
+                        </Text>
+                        <Text fontSize="sm" color="gray.500" mt={1}>
+                            Lưu hợp đồng, giấy tờ pháp lý theo thư mục và liên kết với hồ sơ khách hàng.
+                        </Text>
+                    </Box>
+                    <Flex gap={2} direction={{ base: 'column', md: 'row' }}>
+                        <InputGroup minW={{ md: '280px' }}>
+                            <InputLeftElement pointerEvents="none"><Icon as={MdSearch} color="gray.400" /></InputLeftElement>
                             <Input
-                                onFocus={onOpen}
-                                fontSize='sm'
-                                onChange={handleChange}
-                                onBlur={() => setTimeout(onClose, 200)}
-                                value={values.folderName}
-                                name="folderName"
-                                placeholder='Enter Folder Name'
-                                fontWeight='500'
-                                borderColor={errors?.folderName && touched?.folderName ? "red.300" : null}
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                placeholder="Tìm thư mục, tên tài liệu, khách..."
+                                borderRadius="10px"
                             />
-                            {isOpen && values?.folderName && data?.filter((option) => option?.folderName?.toLowerCase()?.includes(values?.folderName.toLowerCase())).length > 0 && (
-                                <List position={'relative'} border={'1px solid'} bg={'gray.100'} width={'100%'} borderRadius={'0px 0px 20px 20px'} lineHeight={1} >
-                                    {data?.filter((option) => option?.folderName?.toLowerCase()?.includes(values?.folderName.toLowerCase())).map((option, index) => (
-                                        <ListItem p={3} borderBottom={'2px solid #efefef'} sx={{ '&:last-child': { borderBottom: 'none' } }} key={option?._id} cursor={'pointer'}
-                                            onClick={() => {
-                                                setFieldValue('folderName', option?.folderName)
-                                            }}
-                                        >
-                                            {option?.folderName}
-                                        </ListItem>
-                                    ))}
-                                </List>
-                            )}
-                            <Text mb='10px' color={'red'}> {errors.folderName && touched.folderName && errors.folderName}</Text>
-                        </GridItem>
-                        <GridItem colSpan={{ base: 12 }} >
-                            <FormLabel display='flex' ms='4px' fontSize='sm' fontWeight='500' mb='8px'>
-                                File Name
-                            </FormLabel>
-                            <Input
-                                fontSize='sm'
-                                onChange={handleChange}
-                                onBlur={() => setTimeout(onClose, 200)}
-                                value={values.filename}
-                                name="filename"
-                                placeholder='Enter File Name'
-                                fontWeight='500'
-                                borderColor={errors?.filename && touched?.filename ? "red.300" : null}
-                            />
-                            <Text mb='10px' color={'red'}> {errors.filename && touched.filename && errors.filename}</Text>
-                        </GridItem>
-                        <Upload count={values.files.length} onFileSelect={(file) => setFieldValue('files', file)} />
-                        <Button disabled={isLoding ? true : false} onClick={handleSubmit} variant='brand' fontWeight='500'>
-                            {isLoding ? <Spinner /> : 'Publish now'}
+                        </InputGroup>
+                        <Button leftIcon={<Icon as={MdCloudUpload} />} variant="brand" onClick={() => openUpload('')} flexShrink={0}>
+                            Tải lên
                         </Button>
-                    </Card>
-                </GridItem>
+                    </Flex>
+                </Flex>
+                {renderContent()}
+            </Card>
 
-            </Grid>
-
-
-        </div>
-    )
+            <UploadModal
+                isOpen={upload.isOpen}
+                onClose={upload.onClose}
+                folderNames={folderNames}
+                defaultFolder={uploadFolder}
+                onUploaded={reload}
+            />
+            <LinkModal
+                isOpen={link.isOpen}
+                onClose={link.onClose}
+                file={target}
+                contacts={contacts}
+                leads={leads}
+                loadingContacts={loadingContacts}
+                loadingLeads={loadingLeads}
+                onLinked={reload}
+            />
+            <ConfirmDialog
+                isOpen={remove.isOpen}
+                onClose={remove.onClose}
+                onConfirm={deleteDocument}
+                title="Xóa tài liệu"
+                message={`Xóa tài liệu “${target?.fileName || ''}”? Tài liệu sẽ không còn hiện trong thư mục và hồ sơ khách.`}
+                confirmLabel="Xóa"
+            />
+        </>
+    );
 }
-
-export default Index

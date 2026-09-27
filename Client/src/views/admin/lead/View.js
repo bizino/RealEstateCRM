@@ -1,443 +1,249 @@
-import { AddIcon, ChevronDownIcon, DeleteIcon, EditIcon } from "@chakra-ui/icons";
+import { ChevronDownIcon, DeleteIcon, EditIcon } from '@chakra-ui/icons';
 import {
-    Box, Button, Flex, Grid, GridItem, Heading, Menu, MenuButton, MenuDivider, MenuItem, MenuList,
-    Tab,
-    TabList,
-    TabPanel,
-    TabPanels,
-    Tabs,
-    Text,
-    VStack,
-    useDisclosure,
-} from "@chakra-ui/react";
-import FolderTreeView from 'components/FolderTreeView/folderTreeView';
-import Card from "components/card/Card";
-import { HSeparator } from "components/separator/Separator";
-import Spinner from "components/spinner/Spinner";
-import { constant } from "constant";
-import moment from "moment/moment";
-import { useEffect, useState } from "react";
-import { BsFillSendFill, BsFillTelephoneFill } from "react-icons/bs";
-import { IoIosArrowBack } from "react-icons/io";
-import { SiGooglemeet } from "react-icons/si";
-import { Link, useParams } from "react-router-dom";
-import { toast } from "react-toastify";
-import { getApi } from "services/api";
-import ColumnsTable from "../contact/components/ColumnsTable";
-import PhoneCall from "../contact/components/phonCall";
-import AddEmailHistory from "../emailHistory/components/AddEmail";
-import AddMeeting from "../meeting/components/Addmeeting";
-import MeetingTable from "../meeting/components/CheckTable";
-import AddPhoneCall from "../phoneCall/components/AddPhoneCall";
-import TaskTable from "../task/components/CheckTable.js";
-import AddTask from "../task/components/addTask";
-import Add from "./Add";
-import Delete from "./Delete";
-import Edit from "./Edit";
+    Alert, AlertIcon, Button, Flex, Heading, HStack, IconButton, Link, Menu, MenuButton, MenuItem, MenuList, SimpleGrid,
+    Spinner, Stack, Tab, TabList, TabPanel, TabPanels, Tabs, Text, Tooltip, useDisclosure, Wrap, WrapItem,
+} from '@chakra-ui/react';
+import Card from 'components/card/Card';
+import ActivityTimeline, { activityItems } from 'components/crm/ActivityTimeline';
+import ConfirmDialog from 'components/crm/ConfirmDialog';
+import ContactActions from 'components/crm/ContactActions';
+import DetailGrid from 'components/crm/DetailGrid';
+import StatusBadge from 'components/crm/StatusBadge';
+import { CUSTOMER_TYPES, LEAD_SOURCES, LEAD_STATUSES, PROPERTY_TYPES, labelOf, selectable } from 'constants/realEstate';
+import useApiData from 'hooks/useApiData';
+import { useState } from 'react';
+import { MdCall, MdEmail, MdEventAvailable, MdPersonAdd, MdTaskAlt } from 'react-icons/md';
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { apiDelete, apiPost, apiPut, downloadFile } from 'services/crm';
+import { formatDate, formatPhone, userName } from 'utils/format';
+import { budgetText } from 'views/admin/contact/contactFields';
+import EmailForm from 'views/admin/emailHistory/EmailForm';
+import MeetingForm from 'views/admin/meeting/MeetingForm';
+import CallForm from 'views/admin/phoneCall/CallForm';
+import TaskForm from 'views/admin/task/TaskForm';
+import LeadForm from './LeadForm';
+import { followUpState } from './leadFields';
 
-
-const View = () => {
-
-    const param = useParams()
-
-    const [data, setData] = useState()
-    const [allData, setAllData] = useState([])
-    const { isOpen, onOpen, onClose } = useDisclosure()
-    const [edit, setEdit] = useState(false);
-    const [deleteModel, setDelete] = useState(false);
-    const [isLoding, setIsLoding] = useState(false)
-    // Keep the selected tab while the data is reloaded (after adding an activity or a file)
-    const [tabIndex, setTabIndex] = useState(0)
-    const [taskModel, setTaskModel] = useState(false);
-    const [addMeeting, setMeeting] = useState(false);
-
-    const size = "lg";
-
-
-    const [addEmailHistory, setAddEmailHistory] = useState(false);
-    const [addPhoneCall, setAddPhoneCall] = useState(false);
-
-    const columnsDataColumns = [
-        { Header: "sender", accessor: "senderName", },
-        { Header: "recipient", accessor: "createByName", },
-        { Header: "time stamp", accessor: "timestamp", },
-        { Header: "Created", accessor: "createBy", },
-    ];
-
-    const textColumnsDataColumns = [
-        { Header: "sender", accessor: "senderName", },
-        { Header: "recipient", accessor: "to", },
-        { Header: "time stamp", accessor: "timestamp", },
-        { Header: "Created", accessor: "createBy", },
-    ];
-
-    const MeetingColumns = [
-        { Header: "#", accessor: "_id", isSortable: false, width: 10 },
-        { Header: 'agenda', accessor: 'agenda' },
-        { Header: "date Time", accessor: "dateTime", },
-        { Header: "times tamp", accessor: "timestamp", },
-        { Header: "create By", accessor: "createdByName", },
-    ];
-    const taskColumns = [
-        { Header: "#", accessor: "_id", isSortable: false, width: 5 },
-        { Header: 'Title', accessor: 'title' },
-        { Header: "Category", accessor: "category", },
-        { Header: "Assignment To", accessor: "assignmentToName", },
-        { Header: "Start Date", accessor: "start", },
-        { Header: "End Date", accessor: "end", },
-    ];
-
-    const download = async (data) => {
-        if (data) {
-            let result = await getApi(`api/document/download/`, data)
-            if (result && result.status === 200) {
-                window.open(`${constant.baseUrl}api/document/download/${data}`)
-                toast.success('file Download successful')
-            } else if (result && result.response.status === 404) {
-                toast.error('file Not Found')
-            }
-        }
+// Documents are served with the session token only
+const downloadDocument = async (file) => {
+    try {
+        await downloadFile(`api/document/download/${file._id}`, file.fileName);
+    } catch (e) {
+        toast.error(e.message);
     }
-
-    const fetchData = async () => {
-        setIsLoding(true)
-        let response = await getApi('api/lead/view/', param.id)
-        setData(response.data?.lead);
-        setAllData(response.data);
-        setIsLoding(false)
-    }
-    useEffect(() => {
-        fetchData()
-    }, [edit, addEmailHistory, addPhoneCall])
-
-    function toCamelCase(text) {
-        return text?.replace(/([a-z])([A-Z])/g, '$1 $2');
-    }
-    return (
-        <>
-            <Add isOpen={isOpen} size={size} onClose={onClose} />
-            <Edit isOpen={edit} size={size} onClose={setEdit} />
-            <Delete isOpen={deleteModel} onClose={setDelete} method='one' url='api/lead/delete/' id={param.id} />
-
-            {isLoding ?
-                <Flex justifyContent={'center'} alignItems={'center'} width="100%" >
-                    <Spinner />
-                </Flex> : <>
-                    {/* <Grid templateColumns="repeat(6, 1fr)" mb={3} gap={1}>
-                        <GridItem colStart={6} >
-                            <Flex justifyContent={"right"}>
-                                <Menu>
-                                    <MenuButton variant="outline" colorScheme='blackAlpha' va mr={2.5} as={Button} rightIcon={<ChevronDownIcon />}>
-                                        Actions
-                                    </MenuButton>
-                                    <MenuDivider />
-                                    <MenuList>
-                                        <MenuItem onClick={() => onOpen()} icon={<AddIcon />}>Add</MenuItem>
-                                        <MenuItem onClick={() => setEdit(true)} icon={<EditIcon />}>Edit</MenuItem>
-                                        <MenuDivider />
-                                        <MenuItem onClick={() => setDelete(true)} icon={<DeleteIcon />}>Delete</MenuItem>
-                                    </MenuList>
-                                </Menu>
-                                <Link to="/lead">
-                                    <Button leftIcon={<IoIosArrowBack />} variant="brand">
-                                        Back
-                                    </Button>
-                                </Link>
-                            </Flex>
-                        </GridItem>
-                    </Grid> */}
-
-                    <Tabs index={tabIndex} onChange={setTabIndex}>
-                        <Grid templateColumns="repeat(3, 1fr)" mb={3} gap={1}>
-                            <GridItem colSpan={2}>
-                                <TabList sx={{
-                                    border: "none",
-                                    '& button:focus': { boxShadow: 'none', },
-                                    '& button': {
-                                        margin: "0 5px", border: '2px solid #8080803d', borderTopLeftRadius: "10px", borderTopRightRadius: "10px", borderBottom: 0
-                                    },
-                                    '& button[aria-selected="true"]': {
-                                        border: "2px solid brand.200", borderBottom: 0
-                                    },
-                                }} >
-                                    <Tab >Information</Tab>
-                                    <Tab>Activity</Tab>
-                                    <Tab>Document</Tab>
-                                </TabList>
-
-                            </GridItem>
-                            <GridItem  >
-                                <Flex justifyContent={"right"}>
-                                    <Menu>
-                                        <MenuButton variant="outline" colorScheme='blackAlpha' va mr={2.5} as={Button} rightIcon={<ChevronDownIcon />}>
-                                            Actions
-                                        </MenuButton>
-                                        <MenuDivider />
-                                        <MenuList>
-                                            <MenuItem onClick={() => onOpen()} icon={<AddIcon />}>Add</MenuItem>
-                                            <MenuItem onClick={() => setEdit(true)} icon={<EditIcon />}>Edit</MenuItem>
-                                            <MenuDivider />
-                                            <MenuItem onClick={() => setDelete(true)} icon={<DeleteIcon />}>Delete</MenuItem>
-                                        </MenuList>
-                                    </Menu>
-                                    <Link to="/lead">
-                                        <Button leftIcon={<IoIosArrowBack />} variant="brand">
-                                            Back
-                                        </Button>
-                                    </Link>
-                                </Flex>
-                            </GridItem>
-                        </Grid>
-
-                        <TabPanels>
-                            <TabPanel pt={4} p={0}>
-
-                                <Grid templateColumns="repeat(12, 1fr)" gap={3}>
-                                    <GridItem colSpan={{ base: 12, md: 6 }}>
-                                        <Card >
-                                            <Grid templateColumns="repeat(12, 1fr)" gap={4}>
-                                                <GridItem colSpan={12}>
-                                                    <Box>
-                                                        <Heading size="md" mb={3}>
-                                                            Basic Lead Information
-                                                        </Heading>
-                                                        <HSeparator />
-                                                    </Box>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Name</Text>
-                                                    <Text>{data?.leadName ? data?.leadName : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Email</Text>
-                                                    <Text>{data?.leadEmail ? data?.leadEmail : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Phone Number</Text>
-                                                    <Text>{data?.leadPhoneNumber ? data?.leadPhoneNumber : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Address</Text>
-                                                    <Text>{data?.leadAddress ? data?.leadAddress : 'N/A'}</Text>
-                                                </GridItem>
-                                            </Grid>
-                                        </Card>
-                                    </GridItem>
-                                    <GridItem colSpan={{ base: 12, md: 6 }}>
-                                        <Card >
-                                            <Grid templateColumns="repeat(12, 1fr)" gap={4}>
-                                                <GridItem colSpan={12}>
-                                                    <Box>
-                                                        <Heading size="md" mb={3}>
-                                                            Lead Dates and Follow-up
-                                                        </Heading>
-                                                        <HSeparator />
-                                                    </Box>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead FollowUp Status </Text>
-                                                    <Text>{data?.leadFollowUpStatus ? data?.leadFollowUpStatus : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Creation Date </Text>
-                                                    <Text>{moment(data?.leadCreationDate).format('L')}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Conversion Date </Text>
-                                                    <Text>{moment(data?.leadConversionDate).format('L')}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold">  Lead FollowUp Date </Text>
-                                                    <Text>{moment(data?.leadFollowUpDate).format('L')}</Text>
-                                                </GridItem>
-                                            </Grid>
-                                        </Card>
-                                    </GridItem>
-
-                                    <GridItem colSpan={{ base: 12, md: 6 }}>
-                                        <Card >
-                                            <Grid templateColumns="repeat(12, 1fr)" gap={4}>
-                                                <GridItem colSpan={12}>
-                                                    <Box>
-                                                        <Heading size="md" mb={3}>
-                                                            Lead Source and Details
-                                                        </Heading>
-                                                        <HSeparator />
-                                                    </Box>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Source </Text>
-                                                    <Text>{data?.leadSource ? data?.leadSource : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Status </Text>
-                                                    <Text textTransform={'capitalize'}>{data?.leadStatus ? toCamelCase(data?.leadStatus) : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Source Details </Text>
-                                                    <Text>{data?.leadSourceDetails ? data?.leadSourceDetails : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Campaign </Text>
-                                                    <Text>{data?.leadCampaign ? data?.leadCampaign : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Source Channel </Text>
-                                                    <Text>{data?.leadSourceChannel ? data?.leadSourceChannel : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Source Medium </Text>
-                                                    <Text>{data?.leadSourceMedium ? data?.leadSourceMedium : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Source Campaign </Text>
-                                                    <Text>{data?.leadSourceCampaign ? data?.leadSourceCampaign : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Source Referral </Text>
-                                                    <Text>{data?.leadSourceReferral ? data?.leadSourceReferral : 'N/A'}</Text>
-                                                </GridItem>
-                                            </Grid>
-                                        </Card>
-                                    </GridItem>
-
-                                    <GridItem colSpan={{ base: 12, md: 6 }}>
-                                        <Card >
-                                            <Grid templateColumns="repeat(12, 1fr)" gap={4}>
-                                                <GridItem colSpan={12}>
-                                                    <Box>
-                                                        <Heading size="md" mb={3}>
-                                                            Lead Assignment and Ownership
-                                                        </Heading>
-                                                        <HSeparator />
-                                                    </Box>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Assigned Agent</Text>
-                                                    <Text>{data?.leadAssignedAgent ? data?.leadAssignedAgent : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Assigned Agent</Text>
-                                                    <Text>{data?.leadAssignedAgent ? data?.leadAssignedAgent : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Communication Preferences</Text>
-                                                    <Text>{data?.leadCommunicationPreferences ? data?.leadCommunicationPreferences : 'N/A'}</Text>
-                                                </GridItem>
-                                            </Grid>
-                                        </Card>
-                                    </GridItem>
-                                    <GridItem colSpan={{ base: 12 }}>
-                                        <Card >
-                                            <Grid templateColumns="repeat(12, 1fr)" gap={4}>
-                                                <GridItem colSpan={12}>
-                                                    <Box>
-                                                        <Heading size="md" mb={3}>
-                                                            Lead Scoring and Nurturing
-                                                        </Heading>
-                                                        <HSeparator />
-                                                    </Box>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Score </Text>
-                                                    <Text>{data?.leadScore ? data?.leadScore : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Nurturing Workflow </Text>
-                                                    <Text>{data?.leadNurturingWorkflow ? data?.leadNurturingWorkflow : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Engagement Level </Text>
-                                                    <Text>{data?.leadEngagementLevel ? data?.leadEngagementLevel : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Conversion Rate </Text>
-                                                    <Text>{data?.leadConversionRate ? data?.leadConversionRate : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Nurturing Stage </Text>
-                                                    <Text>{data?.leadNurturingStage ? data?.leadNurturingStage : 'N/A'}</Text>
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 12, md: 6 }} >
-                                                    <Text color={'blackAlpha.900'} fontSize="sm" fontWeight="bold"> Lead Next Action </Text>
-                                                    <Text>{data?.leadNextAction ? data?.leadNextAction : 'N/A'}</Text>
-                                                </GridItem>
-                                            </Grid>
-                                        </Card>
-                                    </GridItem>
-                                </Grid>
-
-                            </TabPanel>
-                            <TabPanel pt={4} p={0}>
-                                <GridItem colSpan={{ base: 4 }} >
-                                    <Card >
-                                        <Grid overflow={'hidden'} templateColumns={{ base: "1fr" }} gap={4}>
-                                            <GridItem colSpan={2}>
-                                                <Box>
-                                                    <Heading size="md" mb={3}>
-                                                        Communication
-                                                    </Heading>
-                                                    <HSeparator />
-                                                </Box>
-                                            </GridItem>
-                                            <Grid templateColumns={'repeat(2, 1fr)'} gap={4}>
-                                                <GridItem colSpan={{ base: 2 }}>
-                                                    {allData?.Email && allData?.Email?.length ? <ColumnsTable fetchData={fetchData} columnsData={columnsDataColumns} lead='true' tableData={allData.Email} title={'Email '} /> : <Button onClick={() => setAddEmailHistory(true)} leftIcon={<BsFillSendFill />} colorScheme="gray" >Send Email </Button>}
-                                                    <AddEmailHistory fetchData={fetchData} isOpen={addEmailHistory} onClose={setAddEmailHistory} data={data?.contact} lead='true' id={param.id} />
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 2 }}>
-                                                    {allData?.phoneCall?.length > 0 ? <PhoneCall fetchData={fetchData} columnsData={columnsDataColumns} lead='true' tableData={allData?.phoneCall} title={'Call '} /> : <Button onClick={() => setAddPhoneCall(true)} leftIcon={<BsFillTelephoneFill />} colorScheme="gray" > Call </Button>}
-                                                    <AddPhoneCall fetchData={fetchData} isOpen={addPhoneCall} onClose={setAddPhoneCall} data={data?.contact} id={param.id} lead='true' />
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 2 }}>
-                                                    {allData?.task?.length > 0 ? <TaskTable className='table-container' setTaskModel={setTaskModel} fetchData={fetchData} columnsData={taskColumns} data={allData?.task} title={'Task '} /> : <Button onClick={() => setTaskModel(true)} leftIcon={<AddIcon />} colorScheme="gray" >Create Task</Button>}
-                                                    <AddTask fetchData={fetchData} isOpen={taskModel} onClose={setTaskModel} from="lead" id={param.id} />
-                                                </GridItem>
-                                                <GridItem colSpan={{ base: 2 }}>
-                                                    {allData?.meeting?.length > 0 ? <MeetingTable className='table-container' setMeeting={setMeeting} fetchData={fetchData} columnsData={MeetingColumns} data={allData?.meeting} title={'meeting '} /> : <Button onClick={() => setMeeting(true)} leftIcon={<SiGooglemeet />} colorScheme="gray" >Add Meeting </Button>}
-                                                    <AddMeeting fetchData={fetchData} isOpen={addMeeting} onClose={setMeeting} from="lead" id={param.id} />
-                                                </GridItem>
-                                            </Grid>
-                                        </Grid>
-                                    </Card>
-                                </GridItem>
-                            </TabPanel>
-                            <TabPanel pt={4} p={0}>
-                                <GridItem colSpan={{ base: 4 }} >
-                                    <Card minH={'50vh'} >
-                                        <Heading size="lg" mb={4} >
-                                            Documents
-                                        </Heading>
-                                        <HSeparator />
-                                        <VStack mt={4} alignItems="flex-start">
-                                            {allData?.Document?.length > 0 ? allData?.Document?.map((item) => (
-                                                <FolderTreeView name={item.folderName} item={item}>
-                                                    {item?.files?.map((file) => (
-                                                        <FolderTreeView download={download} data={file} name={file.fileName} isFile from="lead" />
-                                                    ))}
-                                                </FolderTreeView>
-                                            )) : <Text> No Documents Found</Text>}
-                                        </VStack>
-                                    </Card>
-                                </GridItem>
-                            </TabPanel>
-
-                        </TabPanels>
-                    </Tabs>
-                    <Card mt={3}>
-                        <Grid templateColumns="repeat(6, 1fr)" gap={1}>
-                            <GridItem colStart={6} >
-                                <Flex justifyContent={"right"}>
-                                    <Button onClick={() => setEdit(true)} leftIcon={<EditIcon />} mr={2.5} variant="outline" colorScheme="green">Edit</Button>
-                                    <Button style={{ background: 'red.800' }} onClick={() => setDelete(true)} leftIcon={<DeleteIcon />} colorScheme="red" >Delete</Button>
-                                </Flex>
-                            </GridItem>
-                        </Grid>
-                    </Card>
-                </>
-            }
-        </>
-    );
 };
 
-export default View;
+export default function LeadView() {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const { data, isLoading, error, reload } = useApiData(`api/lead/view/${id}`, { initial: null });
+    const edit = useDisclosure();
+    const remove = useDisclosure();
+    const convert = useDisclosure();
+    const callForm = useDisclosure();
+    const emailForm = useDisclosure();
+    const meetingForm = useDisclosure();
+    const taskForm = useDisclosure();
+    const [tabIndex, setTabIndex] = useState(0);
+
+    if (isLoading && !data) return <Flex justify="center" py={20}><Spinner /></Flex>;
+    if (error || !data?.lead) {
+        return (
+            <Alert status="warning" borderRadius="md">
+                <AlertIcon />
+                {error?.status === 404 ? 'Không tìm thấy khách tiềm năng (có thể đã bị xóa hoặc do nhân viên khác phụ trách).' : 'Không tải được khách tiềm năng.'}
+                <Button ml="auto" size="sm" onClick={() => navigate('/leads')}>Về danh sách</Button>
+            </Alert>
+        );
+    }
+
+    const lead = data.lead;
+    const name = lead.leadName || '(không tên)';
+    const status = lead.leadStatus || 'new';
+    const converted = status === 'converted' && lead.convertedContact;
+    const activities = activityItems({ calls: data.phoneCall, emails: data.Email, meetings: data.meeting, tasks: data.task });
+    const files = (data.Document || []).flatMap((folder) => (folder.files || []).map((file) => ({ ...file, folderName: folder.folderName })));
+    const followUp = followUpState(lead);
+
+    const changeStatus = async (value) => {
+        try {
+            await apiPut(`api/lead/edit/${lead._id}`, { leadStatus: value });
+            toast.success(`Đã chuyển sang: ${labelOf(LEAD_STATUSES, value)}`);
+            reload();
+        } catch (e) {
+            toast.error(e.message);
+        }
+    };
+
+    const convertLead = async () => {
+        try {
+            const result = await apiPost(`api/lead/convert/${lead._id}`);
+            toast.success(result.existing ? 'Đã gộp vào khách hàng có sẵn cùng số điện thoại' : 'Đã chuyển thành khách hàng');
+            navigate(`/contacts/${result.contact._id}`);
+        } catch (e) {
+            toast.error(e.message);
+            throw e;
+        }
+    };
+
+    const deleteLead = async () => {
+        try {
+            await apiDelete(`api/lead/delete/${lead._id}`);
+            toast.success('Đã xóa khách tiềm năng');
+            navigate('/leads');
+        } catch (e) {
+            toast.error(e.message);
+            throw e;
+        }
+    };
+
+    return (
+        <Stack spacing={5}>
+            <Card>
+                <Flex direction={{ base: 'column', lg: 'row' }} justify="space-between" gap={4}>
+                    <Stack spacing={2}>
+                        <HStack spacing={3} flexWrap="wrap">
+                            <Heading size="lg">{name}</Heading>
+                            <StatusBadge options={LEAD_STATUSES} value={status} />
+                        </HStack>
+                        <HStack spacing={2}>
+                            <Text fontSize="lg" fontWeight="600">{formatPhone(lead.leadPhoneNumber) || 'Chưa có SĐT'}</Text>
+                            <ContactActions phone={lead.leadPhoneNumber} email={lead.leadEmail} size="md" />
+                        </HStack>
+                        <Text color="gray.600">
+                            {[labelOf(LEAD_SOURCES, lead.leadSource), lead.leadCampaign, `nhận ngày ${formatDate(lead.createdDate)}`].filter(Boolean).join(' · ')}
+                        </Text>
+                        {lead.leadFollowUpDate && followUp !== 'none' && (
+                            <Text color={followUp === 'overdue' ? 'red.500' : followUp === 'today' ? 'orange.500' : 'gray.600'} fontWeight="600">
+                                Hẹn liên hệ lại: {formatDate(lead.leadFollowUpDate)}{lead.leadNextAction ? ` – ${lead.leadNextAction}` : ''}
+                            </Text>
+                        )}
+                    </Stack>
+                    <Stack spacing={2} align={{ base: 'stretch', lg: 'flex-end' }}>
+                        <Wrap spacing={2} justify={{ lg: 'flex-end' }}>
+                            {converted ? (
+                                <WrapItem>
+                                    <Button as={RouterLink} to={`/contacts/${lead.convertedContact}`} colorScheme="green" leftIcon={<MdPersonAdd />}>Xem khách hàng</Button>
+                                </WrapItem>
+                            ) : (
+                                <WrapItem>
+                                    <Button colorScheme="green" leftIcon={<MdPersonAdd />} onClick={convert.onOpen}>Chuyển thành khách hàng</Button>
+                                </WrapItem>
+                            )}
+                        </Wrap>
+                        <Wrap spacing={2} justify={{ lg: 'flex-end' }}>
+                            <WrapItem><Button size="sm" leftIcon={<MdCall />} onClick={callForm.onOpen}>Ghi cuộc gọi</Button></WrapItem>
+                            <WrapItem><Button size="sm" leftIcon={<MdEventAvailable />} onClick={meetingForm.onOpen}>Đặt lịch hẹn</Button></WrapItem>
+                            <WrapItem><Button size="sm" leftIcon={<MdTaskAlt />} onClick={taskForm.onOpen}>Thêm việc</Button></WrapItem>
+                            <WrapItem><Button size="sm" leftIcon={<MdEmail />} onClick={emailForm.onOpen}>Ghi email</Button></WrapItem>
+                        </Wrap>
+                        <Wrap spacing={2} justify={{ lg: 'flex-end' }}>
+                            {!converted && (
+                                <WrapItem>
+                                    <Menu>
+                                        <MenuButton as={Button} size="sm" rightIcon={<ChevronDownIcon />} variant="outline">Tình trạng</MenuButton>
+                                        <MenuList>
+                                            {selectable(LEAD_STATUSES).filter((option) => option.value !== 'converted').map((option) => (
+                                                <MenuItem key={option.value} onClick={() => changeStatus(option.value)} fontWeight={option.value === status ? '700' : 'normal'}>
+                                                    {option.label}
+                                                </MenuItem>
+                                            ))}
+                                        </MenuList>
+                                    </Menu>
+                                </WrapItem>
+                            )}
+                            <WrapItem><Button size="sm" leftIcon={<EditIcon />} variant="brand" onClick={edit.onOpen}>Sửa</Button></WrapItem>
+                            <WrapItem>
+                                <Tooltip label="Xóa khách tiềm năng" hasArrow>
+                                    <IconButton size="sm" icon={<DeleteIcon />} colorScheme="red" variant="outline" aria-label="Xóa" onClick={remove.onOpen} />
+                                </Tooltip>
+                            </WrapItem>
+                        </Wrap>
+                    </Stack>
+                </Flex>
+            </Card>
+
+            <Card>
+                <Tabs index={tabIndex} onChange={setTabIndex} colorScheme="brand" isLazy>
+                    <TabList overflowX="auto" overflowY="hidden">
+                        <Tab whiteSpace="nowrap">Chăm sóc ({activities.length})</Tab>
+                        <Tab whiteSpace="nowrap">Thông tin</Tab>
+                        <Tab whiteSpace="nowrap">Tài liệu ({files.length})</Tab>
+                    </TabList>
+                    <TabPanels>
+                        <TabPanel px={0}>
+                            <ActivityTimeline items={activities} />
+                        </TabPanel>
+                        <TabPanel px={0}>
+                            <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8}>
+                                <DetailGrid
+                                    title="Liên hệ"
+                                    items={[
+                                        { label: 'Số điện thoại', value: formatPhone(lead.leadPhoneNumber) },
+                                        { label: 'Email', value: lead.leadEmail },
+                                        { label: 'Địa chỉ', value: lead.leadAddress, span: 2 },
+                                        { label: 'Nguồn', value: labelOf(LEAD_SOURCES, lead.leadSource) },
+                                        { label: 'Chiến dịch', value: lead.leadCampaign },
+                                        { label: 'Nhân viên phụ trách', value: userName(lead.createBy), optional: true },
+                                        { label: 'Ngày nhận', value: formatDate(lead.createdDate) },
+                                        { label: 'Ngày chuyển thành khách hàng', value: formatDate(lead.leadConversionDate), optional: true },
+                                    ]}
+                                />
+                                <DetailGrid
+                                    title="Nhu cầu và chăm sóc"
+                                    items={[
+                                        { label: 'Nhu cầu', value: labelOf(CUSTOMER_TYPES, lead.customerType) },
+                                        { label: 'Loại BĐS quan tâm', value: labelOf(PROPERTY_TYPES, lead.interestedPropertyType) },
+                                        { label: 'Ngân sách', value: budgetText(lead) },
+                                        { label: 'Khu vực quan tâm', value: lead.interestedArea },
+                                        { label: 'Hẹn liên hệ lại', value: formatDate(lead.leadFollowUpDate) },
+                                        { label: 'Việc cần làm tiếp', value: lead.leadNextAction },
+                                        { label: 'Ghi chú', value: lead.leadNotes, span: 2 },
+                                    ]}
+                                />
+                            </SimpleGrid>
+                        </TabPanel>
+                        <TabPanel px={0}>
+                            {files.length === 0 ? (
+                                <Text fontSize="sm" color="gray.500">Chưa có tài liệu. Vào mục Tài liệu để tải lên và liên kết với khách tiềm năng.</Text>
+                            ) : (
+                                <Stack spacing={2}>
+                                    {files.map((file) => (
+                                        <Flex key={file._id} justify="space-between" borderWidth="1px" borderRadius="8px" px={3} py={2}>
+                                            <Link as="button" textAlign="left" color="brand.500" noOfLines={1} onClick={() => downloadDocument(file)}>{file.fileName}</Link>
+                                            <Text fontSize="sm" color="gray.500">{file.folderName} · {formatDate(file.createOn)}</Text>
+                                        </Flex>
+                                    ))}
+                                </Stack>
+                            )}
+                        </TabPanel>
+                    </TabPanels>
+                </Tabs>
+            </Card>
+
+            <LeadForm isOpen={edit.isOpen} onClose={edit.onClose} lead={lead} onSaved={reload} />
+            <CallForm isOpen={callForm.isOpen} onClose={callForm.onClose} defaults={{ createByLead: lead._id, recipient: lead.leadPhoneNumber }} onSaved={reload} />
+            <EmailForm isOpen={emailForm.isOpen} onClose={emailForm.onClose} defaults={{ createByLead: lead._id, recipient: lead.leadEmail }} onSaved={reload} />
+            <MeetingForm isOpen={meetingForm.isOpen} onClose={meetingForm.onClose} defaults={{ attendesLead: [lead._id], meetingType: 'consulting', agenda: `Gặp ${name}` }} onSaved={reload} />
+            <TaskForm isOpen={taskForm.isOpen} onClose={taskForm.onClose} defaults={{ assignmentToLead: lead._id, title: `Liên hệ lại ${name}` }} onSaved={reload} />
+            <ConfirmDialog
+                isOpen={convert.isOpen}
+                onClose={convert.onClose}
+                onConfirm={convertLead}
+                title="Chuyển thành khách hàng"
+                message={`Chuyển ${name} thành khách hàng? Nhu cầu, ghi chú và lịch sử chăm sóc được giữ lại. Nếu số điện thoại đã có khách hàng, hệ thống sẽ gộp vào khách hàng đó.`}
+                confirmLabel="Chuyển"
+                colorScheme="green"
+            />
+            <ConfirmDialog
+                isOpen={remove.isOpen}
+                onClose={remove.onClose}
+                onConfirm={deleteLead}
+                title="Xóa khách tiềm năng"
+                message={`Xóa khách tiềm năng ${name}?`}
+                confirmLabel="Xóa"
+            />
+        </Stack>
+    );
+}

@@ -15,6 +15,13 @@ const handleUnauthorized = (error, path) => {
     }
 }
 
+// Validation, permission or duplicate answers (4xx) are shown to the user, only
+// unexpected failures are logged
+const logError = (error) => {
+    const status = error?.response?.status
+    if (!status || status >= 500) console.error(error)
+}
+
 export const postApi = async (path, data, login) => {
     try {
         let result = await axios.post(constant.baseUrl + path, data, {
@@ -33,7 +40,7 @@ export const postApi = async (path, data, login) => {
         }
         return result
     } catch (e) {
-        console.error(e)
+        logError(e)
         handleUnauthorized(e, path)
         return e
     }
@@ -47,7 +54,7 @@ export const putApi = async (path, data, id) => {
         })
         return result
     } catch (e) {
-        console.error(e)
+        logError(e)
         handleUnauthorized(e, path)
         return e
     }
@@ -65,7 +72,7 @@ export const deleteApi = async (path, id) => {
         }
         return result
     } catch (e) {
-        console.error(e)
+        logError(e)
         handleUnauthorized(e, path)
         return e
     }
@@ -83,7 +90,7 @@ export const deleteManyApi = async (path, data) => {
         }
         return result
     } catch (e) {
-        console.error(e)
+        logError(e)
         handleUnauthorized(e, path)
         return e
     }
@@ -108,7 +115,7 @@ export const getApi = async (path, id) => {
             return result
         }
     } catch (e) {
-        console.error(e)
+        logError(e)
         handleUnauthorized(e, path)
         return e
     }

@@ -1,218 +1,140 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import { useFormik } from "formik";
-// Chakra imports
 import {
-  Box,
-  Button, Checkbox, Flex,
-  FormControl,
-  FormErrorMessage,
-  FormLabel,
-  Heading,
-  Icon,
-  Input,
-  InputGroup,
-  InputRightElement,
-  Text,
-  useColorModeValue
-} from "@chakra-ui/react";
+    Alert, AlertIcon, Box, Button, Checkbox, Flex, FormControl, FormErrorMessage, FormLabel, Heading, Image, Input, Stack, Text,
+    useColorModeValue,
+} from '@chakra-ui/react';
+import illustration from 'assets/img/auth/PNG-02.png';
+import { COMPANY_NAME, LOGO_URL } from 'config';
+import { useFormik } from 'formik';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { loginSchema } from 'schema';
+import { postApi } from 'services/api';
+import { errorMessage } from 'services/crm';
+import PasswordInput from 'views/admin/users/PasswordInput';
 
+export default function SignIn() {
+    const navigate = useNavigate();
+    const [remember, setRemember] = useState(true);
+    const [error, setError] = useState('');
+    const textColor = useColorModeValue('navy.700', 'white');
+    const panelBg = useColorModeValue('secondaryGray.300', 'whiteAlpha.100');
 
-// Custom components
-import DefaultAuth from "layouts/auth/Default";
-// Assets
-import illustration from "assets/img/auth/PNG-02.png";
+    const formik = useFormik({
+        initialValues: { username: '', password: '' },
+        validationSchema: loginSchema,
+        onSubmit: async (values) => {
+            setError('');
+            // postApi stores the token (localStorage when remembered, else sessionStorage) and the user
+            const response = await postApi('api/user/login', { username: values.username.trim(), password: values.password }, remember);
+            if (response?.status === 200 && response.data?.token) {
+                toast.success('Đăng nhập thành công');
+                navigate('/dashboard');
+                return;
+            }
+            const message = errorMessage(response, 'Đăng nhập không thành công, vui lòng thử lại');
+            setError(message);
+            toast.error(message);
+        },
+    });
 
-import { MdOutlineRemoveRedEye } from "react-icons/md";
-import { RiEyeCloseLine } from "react-icons/ri";
-import { postApi } from "services/api";
-import { loginSchema } from "schema";
-import { toast } from "react-toastify";
-import Spinner from "components/spinner/Spinner";
+    const fieldError = (name) => (formik.touched[name] && formik.errors[name]) || '';
 
-function SignIn() {
-  // Chakra color mode
-  const textColor = useColorModeValue("navy.700", "white");
-  const textColorSecondary = "gray.400";
-  const brandStars = useColorModeValue("brand.500", "brand.400");
-  const [isLoding, setIsLoding] = React.useState(false)
-  const [checkBox, setCheckBox] = React.useState(true)
+    return (
+        <Flex minH="100vh" w="100%">
+            <Flex flex="1" direction="column" px={{ base: 5, md: 12, xl: 20 }} py={{ base: 8, md: 10 }}>
+                <Flex flex="1" align="center" justify={{ base: 'center', md: 'flex-start' }}>
+                    <Box w="100%" maxW="420px">
+                        <Stack spacing={2} mb={8}>
+                            {LOGO_URL && <Image src={LOGO_URL} alt={COMPANY_NAME} maxH="56px" maxW="240px" objectFit="contain" mb={3} />}
+                            <Text fontWeight="700" color="brand.500" fontSize="lg">{COMPANY_NAME}</Text>
+                            <Heading color={textColor} fontSize={{ base: '30px', md: '36px' }}>Đăng nhập</Heading>
+                            <Text color="gray.500">Nhập email và mật khẩu để vào hệ thống.</Text>
+                        </Stack>
 
-  const [show, setShow] = React.useState(false);
-  const showPass = () => setShow(!show);
+                        <form onSubmit={formik.handleSubmit} noValidate>
+                            <Stack spacing={5}>
+                                <FormControl isInvalid={Boolean(fieldError('username'))} isRequired>
+                                    <FormLabel fontSize="sm" fontWeight="600" color={textColor}>Email</FormLabel>
+                                    <Input
+                                        name="username"
+                                        type="email"
+                                        inputMode="email"
+                                        autoComplete="username"
+                                        autoCapitalize="none"
+                                        autoCorrect="off"
+                                        spellCheck={false}
+                                        placeholder="email@congty.vn"
+                                        size="lg"
+                                        fontSize="md"
+                                        value={formik.values.username}
+                                        onChange={formik.handleChange}
+                                        onBlur={formik.handleBlur}
+                                    />
+                                    <FormErrorMessage>{fieldError('username')}</FormErrorMessage>
+                                </FormControl>
 
-  const initialValues = {
-    username: '',
-    password: ''
-  }
-  const { errors, values, touched, handleBlur, handleChange, resetForm, handleSubmit } = useFormik({
-    initialValues: initialValues,
-    validationSchema: loginSchema,
-    onSubmit: (values, { resetForm }) => {
-      login()
-    }
-  })
-  const navigate = useNavigate()
+                                <FormControl isInvalid={Boolean(fieldError('password'))} isRequired>
+                                    <FormLabel fontSize="sm" fontWeight="600" color={textColor}>Mật khẩu</FormLabel>
+                                    <PasswordInput
+                                        name="password"
+                                        size="lg"
+                                        fontSize="md"
+                                        autoComplete="current-password"
+                                        placeholder="Nhập mật khẩu"
+                                        value={formik.values.password}
+                                        onChange={formik.handleChange}
+                                        onBlur={formik.handleBlur}
+                                    />
+                                    <FormErrorMessage>{fieldError('password')}</FormErrorMessage>
+                                </FormControl>
 
-  const login = async () => {
-    try {
-      setIsLoding(true)
-      let response = await postApi('api/user/login', values, checkBox)
-      if (response && response.status === 200) {
-        navigate('/admin')
-        toast.success("Login Successfully!")
-        resetForm();
-      } else {
-        toast.error(response.response.data?.error)
-      }
-    }
-    catch (e) {
-      console.log(e)
-    }
-    finally {
-      setIsLoding(false)
-    }
-  }
+                                <Checkbox isChecked={remember} onChange={(e) => setRemember(e.target.checked)} colorScheme="brandScheme">
+                                    <Text fontSize="sm" color={textColor}>Ghi nhớ đăng nhập</Text>
+                                </Checkbox>
 
-  return (
-    <DefaultAuth illustrationBackground={illustration} image={illustration}>
-      <Flex
-        maxW={{ base: "100%", md: "max-content" }}
-        w='100%'
-        mx={{ base: "auto", lg: "0px" }}
-        me='auto'
-        h='fit-content'
-        alignItems='start'
-        justifyContent='center'
-        mb={{ base: "30px", md: "60px" }}
-        px={{ base: "25px", md: "0px" }}
-        mt={{ base: "40px", md: "14vh" }}
-        flexDirection='column'>
-        <Box me='auto'>
-          <Heading color={textColor} fontSize='36px' mb='10px'>
-            Sign In
-          </Heading>
-          <Text
-            mb='36px'
-            ms='4px'
-            color={textColorSecondary}
-            fontWeight='400'
-            fontSize='md'>
-            Enter your email and password to sign in!
-          </Text>
-        </Box>
-        <Flex
-          zIndex='2'
-          direction='column'
-          w={{ base: "100%", md: "420px" }}
-          maxW='100%'
-          background='transparent'
-          borderRadius='15px'
-          mx={{ base: "auto", lg: "unset" }}
-          me='auto'
-          mb={{ base: "20px", md: "auto" }}>
-          <form onSubmit={handleSubmit}>
-            <FormControl isInvalid={errors.username && touched.username} >
-              <FormLabel
-                display='flex'
-                ms='4px'
-                fontSize='sm'
-                fontWeight='500'
-                color={textColor}
-                mb='8px'>
-                Email<Text color={brandStars}>*</Text>
-              </FormLabel>
-              <Input
-                fontSize='sm'
-                onChange={handleChange} onBlur={handleBlur}
-                value={values.username}
-                name="username"
-                ms={{ base: "0px", md: "0px" }}
-                type='email'
-                placeholder='mail@simmmple.com'
-                mb={errors.username && touched.username ? undefined : '24px'}
-                fontWeight='500'
-                size='lg'
-                borderColor={errors.username && touched.username ? "red.300" : null}
-                className={errors.username && touched.username ? "isInvalid" : null}
-              />
-              {errors.username && touched.username && <FormErrorMessage mb='24px'> {errors.username}</FormErrorMessage>}
-            </FormControl>
+                                {error && (
+                                    <Alert status="error" borderRadius="md" fontSize="sm">
+                                        <AlertIcon />
+                                        {error}
+                                    </Alert>
+                                )}
 
-            <FormControl isInvalid={errors.password && touched.password} mb="24px">
-              <FormLabel
-                ms='4px'
-                fontSize='sm'
-                fontWeight='500'
-                color={textColor}
-                display='flex'>
-                Password<Text color={brandStars}>*</Text>
-              </FormLabel>
-              <InputGroup size='md'>
-                <Input
-                  isRequired={true}
-                  fontSize='sm'
-                  placeholder='Enter Your Password'
-                  name='password'
-                  mb={errors.password && touched.password ? undefined : '24px'}
-                  value={values.password} onChange={handleChange} onBlur={handleBlur}
-                  size='lg'
-                  variant='auth'
-                  type={show ? "text" : "password"}
-                  borderColor={errors.password && touched.password ? "red.300" : null}
-                  className={errors.password && touched.password ? "isInvalid" : null}
-                />
-                <InputRightElement display='flex' alignItems='center' mt='4px'>
-                  <Icon
-                    color={textColorSecondary}
-                    _hover={{ cursor: "pointer" }}
-                    as={show ? RiEyeCloseLine : MdOutlineRemoveRedEye}
-                    onClick={showPass}
-                  />
-                </InputRightElement>
-              </InputGroup>
-              {errors.password && touched.password && <FormErrorMessage mb='24px'> {errors.password}</FormErrorMessage>}
-              <Flex justifyContent='space-between' align='center' mb='24px'>
-                <FormControl display='flex' alignItems='center'>
-                  <Checkbox
-                    onChange={(e) => setCheckBox(e.target.checked)}
-                    id='remember-login'
-                    value={checkBox}
-                    defaultChecked
-                    colorScheme='brandScheme'
-                    me='10px'
-                  />
-                  <FormLabel
-                    htmlFor='remember-login'
-                    mb='0'
-                    fontWeight='normal'
-                    color={textColor}
-                    fontSize='sm'>
-                    Keep me logged in
-                  </FormLabel>
-                </FormControl>
-              </Flex>
+                                <Button
+                                    type="submit"
+                                    variant="brand"
+                                    size="lg"
+                                    w="100%"
+                                    isLoading={formik.isSubmitting}
+                                    loadingText="Đang đăng nhập"
+                                >
+                                    Đăng nhập
+                                </Button>
 
-              <Flex justifyContent='space-between' align='center' mb='24px'>
-              </Flex>
-              <Button
-                fontSize='sm'
-                variant='brand'
-                fontWeight='500'
-                w='100%'
-                h='50'
-                type="submit"
-                mb='24px'
-                disabled={isLoding ? true : false}
-              >
-                {isLoding ? <Spinner /> : 'Sign In'}
-              </Button>
-            </FormControl>
-          </form>
+                                <Text fontSize="sm" color="gray.500">
+                                    Quên mật khẩu? Vui lòng liên hệ quản trị viên để được đặt lại.
+                                </Text>
+                            </Stack>
+                        </form>
+                    </Box>
+                </Flex>
+                <Text mt={8} fontSize="sm" color="gray.400" textAlign={{ base: 'center', md: 'left' }}>
+                    © {new Date().getFullYear()} {COMPANY_NAME}
+                </Text>
+            </Flex>
+
+            <Flex
+                display={{ base: 'none', md: 'flex' }}
+                w={{ md: '45%', xl: '50%' }}
+                bg={panelBg}
+                borderBottomLeftRadius={{ md: '120px', xl: '200px' }}
+                align="center"
+                justify="center"
+            >
+                <Box bg="white" borderRadius="32px" p={{ md: 6, xl: 10 }} boxShadow="lg" w="50%" maxW="360px">
+                    <Image src={illustration} alt={COMPANY_NAME} w="100%" />
+                </Box>
+            </Flex>
         </Flex>
-      </Flex>
-    </DefaultAuth>
-  );
+    );
 }
-
-export default SignIn;

@@ -1,298 +1,72 @@
-
 import { Icon } from "@chakra-ui/react";
-import { HiUsers } from "react-icons/hi";
-import {
-  MdContacts,
-  MdHome,
-  MdInsertChartOutlined,
-  MdLeaderboard,
-  MdLock
-} from "react-icons/md";
-// icon
 import React from "react";
 import { AiFillFolderOpen, AiOutlineMail } from "react-icons/ai";
-import { FaCalendarAlt, FaRupeeSign, FaTasks } from "react-icons/fa";
+import { FaCalendarAlt, FaHandshake, FaTasks } from "react-icons/fa";
+import { HiUsers } from "react-icons/hi";
 import { LuBuilding2 } from "react-icons/lu";
+import { MdContacts, MdEventNote, MdHome, MdInsertChartOutlined, MdLeaderboard } from "react-icons/md";
 import { PiPhoneCallBold } from "react-icons/pi";
-import { SiGooglemeet } from "react-icons/si";
 
-// Admin Imports
-const MainDashboard = React.lazy(() => import("views/admin/default"));
-const UserDashboard = React.lazy(() => import("views/admin/default"));
+const icon = (as) => <Icon as={as} width="20px" height="20px" color="inherit" />;
 
-// My component
-const Contact = React.lazy(() => import('views/admin/contact'));
-const ContactView = React.lazy(() => import('views/admin/contact/View'));
-
-const User = React.lazy(() => import("views/admin/users"));
+const Dashboard = React.lazy(() => import("views/admin/default"));
+const Leads = React.lazy(() => import("views/admin/lead"));
+const LeadView = React.lazy(() => import("views/admin/lead/View"));
+const Contacts = React.lazy(() => import("views/admin/contact"));
+const ContactView = React.lazy(() => import("views/admin/contact/View"));
+const Properties = React.lazy(() => import("views/admin/property"));
+const PropertyView = React.lazy(() => import("views/admin/property/View"));
+const Deals = React.lazy(() => import("views/admin/deal"));
+const DealView = React.lazy(() => import("views/admin/deal/View"));
+const Meetings = React.lazy(() => import("views/admin/meeting"));
+const MeetingView = React.lazy(() => import("views/admin/meeting/View"));
+const Tasks = React.lazy(() => import("views/admin/task"));
+const TaskView = React.lazy(() => import("views/admin/task/View"));
+const Calendar = React.lazy(() => import("views/admin/calender"));
+const Calls = React.lazy(() => import("views/admin/phoneCall"));
+const CallView = React.lazy(() => import("views/admin/phoneCall/View"));
+const Emails = React.lazy(() => import("views/admin/emailHistory"));
+const EmailView = React.lazy(() => import("views/admin/emailHistory/View"));
+const Documents = React.lazy(() => import("views/admin/document"));
+const Reports = React.lazy(() => import("views/admin/reports"));
+const Users = React.lazy(() => import("views/admin/users"));
 const UserView = React.lazy(() => import("views/admin/users/View"));
 
-const Property = React.lazy(() => import("views/admin/property"));
-const PropertyView = React.lazy(() => import("views/admin/property/View"));
+const SignIn = React.lazy(() => import("views/auth/signIn"));
 
-const Lead = React.lazy(() => import("views/admin/lead"));
-const LeadView = React.lazy(() => import("views/admin/lead/View"));
-
-const Communication = React.lazy(() => import("views/admin/communication"));
-
-const Task = React.lazy(() => import("views/admin/task"));
-const TaskView = React.lazy(() => import("views/admin/task/components/taskView"));
-const Calender = React.lazy(() => import("views/admin/calender"));
-const Payments = React.lazy(() => import("views/admin/payments"));
-
-const Document = React.lazy(() => import("views/admin/document"));
-
-const EmailHistory = React.lazy(() => import("views/admin/emailHistory"));
-const EmailHistoryView = React.lazy(() => import("views/admin/emailHistory/View"));
-
-const Meeting = React.lazy(() => import("views/admin/meeting"));
-const MettingView = React.lazy(() => import("views/admin/meeting/View"));
-
-const PhoneCall = React.lazy(() => import("views/admin/phoneCall"));
-const PhoneCallView = React.lazy(() => import("views/admin/phoneCall/View"));
-
-const Report = React.lazy(() => import("views/admin/reports"));
-
-const TextMsg = React.lazy(() => import("views/admin/textMsg"));
-const TextMsgView = React.lazy(() => import("views/admin/textMsg/View"));
-
-// Auth Imports
-const SignInCentered = React.lazy(() => import("views/auth/signIn"));
-
+// Pages of the application. `section` starts a group of the menu, `hidden`
+// pages are not in the menu (detail pages), `adminOnly` pages are only
+// registered for admins.
 const routes = [
-  // ========================== Dashboard ==========================
-  {
-    name: "Dashboard",
-    layout: "/admin",
-    path: "/default",
-    icon: <Icon as={MdHome} width='20px' height='20px' color='inherit' />,
-    component: MainDashboard,
-  },
-  {
-    name: "Dashboard",
-    layout: "/user",
-    path: "/default",
-    icon: <Icon as={MdHome} width='20px' height='20px' color='inherit' />,
-    component: UserDashboard,
-  },
-  // ========================== Admin Layout ==========================
-  // ------------- lead Routes ------------------------
-  {
-    name: "Lead",
-    layout: "/admin",
-    both: true,
-    path: "/lead",
-    icon: <Icon as={MdLeaderboard} width='20px' height='20px' color='inherit' />,
-    component: Lead,
-  },
-  {
-    name: "Lead View",
-    layout: "/admin",
-    both: true,
-    under: "lead",
-    parentName: "Lead",
-    path: "/leadView/:id",
-    component: LeadView,
-  },
-  // --------------- contact Routes --------------------
-  {
-    name: "Contacts",
-    layout: "/admin",
-    both: true,
-    path: "/contacts",
-    icon: <Icon as={MdContacts} width='20px' height='20px' color='inherit' />,
-    component: Contact,
-  },
-  {
-    name: "Contact View",
-    layout: "/admin",
-    both: true,
-    under: "contacts",
-    parentName: "Contacts",
-    path: "/contactView/:id",
-    component: ContactView,
-  },
-  // ------------- Property Routes ------------------------
-  {
-    name: "Property",
-    layout: "/admin",
-    both: true,
-    path: "/properties",
-    icon: <Icon as={LuBuilding2} width='20px' height='20px' color='inherit' />,
-    component: Property,
-  },
-  {
-    name: "Property View",
-    layout: "/admin",
-    both: true,
-    parentName: "Property",
-    under: "properties",
-    path: "/propertyView/:id",
-    component: PropertyView,
-  },
+  { name: "Tổng quan", path: "/dashboard", icon: icon(MdHome), component: Dashboard },
 
-  // // ------------- Communication Integration Routes ------------------------
-  // {
-  //   name: "Communication Integration",
-  //   layout: "/admin",
-  //   both: true,
-  //   path: "/communication-integration",
-  //   icon: <Icon as={GiSatelliteCommunication} width='20px' height='20px' color='inherit' />,
-  //   component: Communication,
-  // },
-  // ------------- Task Routes ------------------------
-  {
-    name: " Task",
-    layout: "/admin",
-    both: true,
-    path: "/task",
-    icon: <Icon as={FaTasks} width='20px' height='20px' color='inherit' />,
-    component: Task,
-  },
-  {
-    name: "Task View",
-    layout: "/admin",
-    both: true,
-    under: "task",
-    parentName: "Task",
-    path: "/view/:id",
-    component: TaskView,
-  },
-  // ------------- Meeting Routes ------------------------
-  {
-    name: "Meeting",
-    layout: "/admin",
-    both: true,
-    path: "/metting",
-    icon: <Icon as={SiGooglemeet} width='20px' height='20px' color='inherit' />,
-    component: Meeting,
-  },
-  {
-    name: "Meeting View",
-    layout: "/admin",
-    both: true,
-    under: "metting",
-    parentName: "Meeting",
-    path: "/metting/:id",
-    component: MettingView,
-  },
-  // ------------- Phone Routes ------------------------
-  {
-    name: "Call",
-    layout: "/admin",
-    both: true,
-    path: "/phone-call",
-    icon: <Icon as={PiPhoneCallBold} width='20px' height='20px' color='inherit' />,
-    component: PhoneCall,
-  },
-  {
-    name: "Call View",
-    layout: "/admin",
-    both: true,
-    under: "phone-call",
-    parentName: "Call",
-    path: "/phone-call/:id",
-    component: PhoneCallView,
-  },
-  // ------------- Email Routes------------------------
-  {
-    // separator: 'History',
-    name: "Email",
-    layout: "/admin",
-    both: true,
-    path: "/email",
-    icon: <Icon as={AiOutlineMail} width='20px' height='20px' color='inherit' />,
-    component: EmailHistory,
-  },
-  {
-    name: "Email View",
-    layout: "/admin",
-    both: true,
-    under: "email",
-    parentName: "Email",
-    path: "/Email/:id",
-    component: EmailHistoryView,
-  },
-  // ------------- Calender Routes ------------------------
-  {
-    name: "Calender",
-    layout: "/admin",
-    both: true,
-    path: "/calender",
-    icon: <Icon as={FaCalendarAlt} width='20px' height='20px' color='inherit' />,
-    component: Calender,
-  },
-  // ------------- Payments Routes ------------------------
-  {
-    name: "Payments",
-    layout: "/admin",
-    both: true,
-    path: "/payments",
-    icon: <Icon as={FaRupeeSign} width='20px' height='20px' color='inherit' />,
-    component: Payments,
-  },
-  // // ------------- Text message Routes ------------------------
-  // {
-  //   name: "Text Msg",
-  //   layout: "/admin",
-  //   both: true,
-  //   path: "/text-msg",
-  //   icon: <Icon as={MdOutlineMessage} width='20px' height='20px' color='inherit' />,
-  //   component: TextMsg,
-  // },
-  // {
-  //   name: "Text Msg View",
-  //   layout: "/admin",
-  //   both: true,
-  //   under: "text-msg",
-  //   path: "/text-msg/:id",
-  //   component: TextMsgView,
-  // },
-  // ------------- Document Routes ------------------------
-  {
-    name: "Documents",
-    layout: "/admin",
-    both: true,
-    path: "/documents",
-    icon: <Icon as={AiFillFolderOpen} width='20px' height='20px' color='inherit' />,
-    component: Document,
-  },
-  // ----------------- Reporting Layout -----------------
-  {
-    name: "Reporting and Analytics",
-    layout: "/admin",
-    both: true,
-    path: "/reporting-analytics",
-    icon: <Icon as={MdInsertChartOutlined} width='20px' height='20px' color='inherit' />,
-    component: Report,
-  },
-  // ------------- user Routes ------------------------
-  {
-    name: "Users",
-    layout: "/admin",
-    path: "/user",
-    icon: <Icon as={HiUsers} width='20px' height='20px' color='inherit' />,
-    component: User,
-  },
-  {
-    name: "User View",
-    both: true,
-    layout: "/admin",
-    parentName: "Email",
-    under: "user",
-    path: "/userView/:id",
-    component: UserView,
-  },
-  // ========================== User layout ==========================
+  { section: "Kinh doanh", name: "Khách tiềm năng", path: "/leads", icon: icon(MdLeaderboard), component: Leads },
+  { name: "Khách tiềm năng", path: "/leads/:id", component: LeadView, hidden: true },
+  { name: "Khách hàng", path: "/contacts", icon: icon(MdContacts), component: Contacts },
+  { name: "Khách hàng", path: "/contacts/:id", component: ContactView, hidden: true },
+  { name: "Bất động sản", path: "/properties", icon: icon(LuBuilding2), component: Properties },
+  { name: "Bất động sản", path: "/properties/:id", component: PropertyView, hidden: true },
+  { name: "Giao dịch", path: "/deals", icon: icon(FaHandshake), component: Deals },
+  { name: "Giao dịch", path: "/deals/:id", component: DealView, hidden: true },
 
-  // ========================== auth layout ==========================
-  {
-    name: "Sign In",
-    layout: "/auth",
-    path: "/sign-in",
-    icon: <Icon as={MdLock} width='20px' height='20px' color='inherit' />,
-    component: SignInCentered,
-  },
+  { section: "Chăm sóc khách hàng", name: "Lịch hẹn", path: "/meetings", icon: icon(MdEventNote), component: Meetings },
+  { name: "Lịch hẹn", path: "/meetings/:id", component: MeetingView, hidden: true },
+  { name: "Công việc", path: "/tasks", icon: icon(FaTasks), component: Tasks },
+  { name: "Công việc", path: "/tasks/:id", component: TaskView, hidden: true },
+  { name: "Lịch làm việc", path: "/calendar", icon: icon(FaCalendarAlt), component: Calendar },
+  { name: "Cuộc gọi", path: "/calls", icon: icon(PiPhoneCallBold), component: Calls },
+  { name: "Cuộc gọi", path: "/calls/:id", component: CallView, hidden: true },
+  { name: "Email", path: "/emails", icon: icon(AiOutlineMail), component: Emails },
+  { name: "Email", path: "/emails/:id", component: EmailView, hidden: true },
+
+  { section: "Quản lý", name: "Tài liệu", path: "/documents", icon: icon(AiFillFolderOpen), component: Documents },
+  { name: "Báo cáo", path: "/reports", icon: icon(MdInsertChartOutlined), component: Reports },
+  { name: "Nhân viên", path: "/users", icon: icon(HiUsers), component: Users, adminOnly: true },
+  { name: "Hồ sơ nhân viên", path: "/users/:id", component: UserView, hidden: true },
+];
+
+export const authRoutes = [
+  { name: "Đăng nhập", path: "/auth/sign-in", component: SignIn },
 ];
 
 export default routes;
