@@ -32,6 +32,22 @@ Getting started with RealEstateCRM is a breeze. Follow our comprehensive install
 
 [Installation Guide](https://github.com/prolinkinfo/RealEstateCRM/discussions/2)
 
+### Configuration
+
+The API reads its settings from `server/.env`, see [`server/.env.example`](server/.env.example). Always set `JWT_SECRET` to a long random value in production: without it the server falls back to the insecure default key (and logs a warning). Changing it logs every user out once.
+
+### Running the tests
+
+```bash
+# API: integration tests against an in-memory MongoDB (the MongoDB binary is downloaded on the first run)
+cd server && npm install && npm test
+
+# Web client: unit tests and production build
+cd Client && npm install && CI=true npm test && npm run build
+```
+
+The same checks run on every pull request (`.github/workflows/tests.yml`).
+
 ## **Contributing**
 
 We believe in the power of collaboration! Join us in making RealEstateCRM even better. Whether you're a developer, designer, or Real Estate enthusiast, your contributions are invaluable. Check out our contribution guidelines and dive into our codebase.
