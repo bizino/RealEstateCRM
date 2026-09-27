@@ -1,5 +1,6 @@
 const express = require('express');
-const reporting = require('./reporting');
+const { wrapController } = require('../../middelwares/errorHandler');
+const reporting = wrapController(require('./reporting'));
 const auth = require('../../middelwares/auth');
 
 const router = express.Router();

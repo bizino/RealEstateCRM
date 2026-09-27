@@ -1,5 +1,6 @@
 const express = require('express');
-const task = require('./task');
+const { wrapController } = require('../../middelwares/errorHandler');
+const task = wrapController(require('./task'));
 const auth = require('../../middelwares/auth');
 
 const router = express.Router();

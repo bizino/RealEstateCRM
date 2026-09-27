@@ -3,9 +3,11 @@ const User = require('../../model/schema/user')
 const PhoneCall = require('../../model/schema/phoneCall');
 const TextMsg = require('../../model/schema/textMsg');
 const mongoose = require('mongoose');
+const { isAdmin, scopedQuery } = require('../../utils/access');
 
 const index = async (req, res) => {
-    const query = req.query
+    // Regular users only get their own statistics
+    const query = scopedQuery(req, '_id')
     query.deleted = false;
     let result = await User.find(query)
     res.send(result)
@@ -34,10 +36,11 @@ const data = async (req, res) => {
             timestamp: { $gte: startDate, $lte: endDate }, // Filter documents with timestamp between startDate and endDate
         };
         // matchFilter.deleted = false;
-        const query = req.query;
+        // Regular users only get their own activity, admins may filter by sender
+        const sender = isAdmin(req) ? req.query.sender : req.user.userId;
         // Convert sender to ObjectId if provided
-        if (query.sender) {
-            matchFilter.sender = new mongoose.Types.ObjectId(query.sender);
+        if (sender) {
+            matchFilter.sender = new mongoose.Types.ObjectId(sender);
         }
 
         let groupFields = {

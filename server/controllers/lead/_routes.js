@@ -1,5 +1,6 @@
 const express = require('express');
-const lead = require('./lead');
+const { wrapController } = require('../../middelwares/errorHandler');
+const lead = wrapController(require('./lead'));
 const auth = require('../../middelwares/auth');
 
 const router = express.Router();

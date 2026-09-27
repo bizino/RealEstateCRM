@@ -1,12 +1,9 @@
 const Task = require('../../model/schema/task')
-const mongoose = require('mongoose');
+const { castIds, isValidId, ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access');
 
 const index = async (req, res) => {
-    query = req.query;
+    const query = castIds(scopedQuery(req), ['createBy']);
     query.deleted = false;
-    if (query.createBy) {
-        query.createBy = new mongoose.Types.ObjectId(query.createBy);
-    }
 
     try {
         let result = await Task.aggregate([
@@ -64,13 +61,13 @@ const add = async (req, res) => {
     try {
         const { title, category, description, notes, reminder, start, end, backgroundColor, borderColor, textColor, display, url, createBy, assignmentTo, assignmentToLead } = req.body;
         // Check if assignmentTo is a valid ObjectId if provided and not empty
-        if (assignmentTo && !mongoose.Types.ObjectId.isValid(assignmentTo)) {
-            res.status(400).json({ error: 'Invalid assignmentTo value' });
+        if (assignmentTo && !isValidId(assignmentTo)) {
+            return res.status(400).json({ error: 'Invalid assignmentTo value' });
         }
-        if (assignmentToLead && !mongoose.Types.ObjectId.isValid(assignmentToLead)) {
-            res.status(400).json({ error: 'Invalid assignmentToLead value' });
+        if (assignmentToLead && !isValidId(assignmentToLead)) {
+            return res.status(400).json({ error: 'Invalid assignmentToLead value' });
         }
-        const taskData = { title, category, description, notes, reminder, start, end, backgroundColor, borderColor, textColor, display, url, createBy, createdDate: new Date() };
+        const taskData = { title, category, description, notes, reminder, start, end, backgroundColor, borderColor, textColor, display, url, createBy: resolveOwner(req, createBy), createdDate: new Date() };
 
         if (assignmentTo) {
             taskData.assignmentTo = assignmentTo;
@@ -89,20 +86,35 @@ const add = async (req, res) => {
 
 const edit = async (req, res) => {
     try {
-        const { title, category, description, notes, reminder, start, end, backgroundColor, borderColor, textColor, display, url, createBy, assignmentTo } = req.body;
+        // createBy is not taken from the body: the owner of a task never changes
+        // through edit (the web client sends the id of whoever is editing)
+        const { title, category, description, notes, reminder, start, end, backgroundColor, borderColor, textColor, display, url, assignmentTo, assignmentToLead } = req.body;
 
-        if (assignmentTo && !mongoose.Types.ObjectId.isValid(assignmentTo)) {
-            res.status(400).json({ error: 'Invalid assignmentTo value' });
+        if (assignmentTo && !isValidId(assignmentTo)) {
+            return res.status(400).json({ error: 'Invalid assignmentTo value' });
         }
-        const taskData = { title, category, description, notes, reminder, start, end, backgroundColor, borderColor, textColor, display, url, createBy };
+        if (assignmentToLead && !isValidId(assignmentToLead)) {
+            return res.status(400).json({ error: 'Invalid assignmentToLead value' });
+        }
+        const taskData = { title, category, description, notes, reminder, start, end, backgroundColor, borderColor, textColor, display, url, updatedDate: new Date() };
+        const unsetData = {};
 
-        if (assignmentTo) {
-            taskData.assignmentTo = assignmentTo;
-        }
+        // A task is assigned to a contact or to a lead: the web client sends the
+        // id of the selected one and null for the other, which is then cleared
+        Object.entries({ assignmentTo, assignmentToLead }).forEach(([field, value]) => {
+            if (value) {
+                taskData[field] = value;
+            } else if (field in req.body) {
+                unsetData[field] = '';
+            }
+        });
         let result = await Task.updateOne(
-            { _id: req.params.id },
-            { $set: taskData }
+            { _id: req.params.id, ...ownerFilter(req) },
+            Object.keys(unsetData).length ? { $set: taskData, $unset: unsetData } : { $set: taskData }
         );
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: "no Data Found." })
+        }
 
         // const result = new Task(taskData);
         // await result.save();
@@ -170,7 +182,10 @@ const view = async (req, res) => {
 
 const deleteData = async (req, res) => {
     try {
-        const result = await Task.findByIdAndUpdate(req.params.id, { deleted: true });
+        const result = await Task.findOneAndUpdate({ _id: req.params.id, ...ownerFilter(req) }, { deleted: true });
+        if (!result) {
+            return res.status(404).json({ message: "no Data Found." })
+        }
         res.status(200).json({ message: "done", result })
     } catch (err) {
         res.status(404).json({ message: "error", err })

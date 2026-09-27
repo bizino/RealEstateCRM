@@ -1,12 +1,13 @@
 const Property = require('../../model/schema/property')
 const multer = require('multer')
 const fs = require('fs');
-const path = require('path');
 const Contact = require('../../model/schema/contact');
+const { ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access');
+const { uniqueFileName, removeUploadedFiles } = require('../../utils/upload');
 
 
 const index = async (req, res) => {
-    const query = req.query
+    const query = scopedQuery(req)
     query.deleted = false;
     // let result = await Property.find(query)
     let allData = await Property.find(query).populate({
@@ -21,6 +22,7 @@ const index = async (req, res) => {
 const add = async (req, res) => {
     try {
         req.body.createdDate = new Date();
+        req.body.createBy = resolveOwner(req, req.body.createBy);
         const user = new Property(req.body);
         await user.save();
         res.status(200).json(user);
@@ -32,10 +34,16 @@ const add = async (req, res) => {
 
 const edit = async (req, res) => {
     try {
+        // The owner never changes through edit (the web client sends the id of
+        // whoever is editing as createBy)
+        const { createBy, ...data } = req.body;
         let result = await Property.updateOne(
-            { _id: req.params.id },
-            { $set: req.body }
+            { _id: req.params.id, ...ownerFilter(req) },
+            { $set: { ...data, updatedDate: new Date() } }
         );
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: "no Data Found." })
+        }
         res.status(200).json(result);
     } catch (err) {
         console.error('Failed to Update Property:', err);
@@ -45,18 +53,19 @@ const edit = async (req, res) => {
 
 const view = async (req, res) => {
     const { id } = req.params
-    let property = await Property.findOne({ _id: id })
-    let result = await Contact.find({ deleted: false })
-
-    let filteredContacts = result.filter((contact) => contact.interestProperty.includes(id));
-
+    let property = await Property.findOne({ _id: id, ...ownerFilter(req) })
     if (!property) return res.status(404).json({ message: "no Data Found." })
+
+    let filteredContacts = await Contact.find({ deleted: false, interestProperty: property._id })
     res.status(200).json({ property, filteredContacts })
 }
 
 const deleteData = async (req, res) => {
     try {
-        const property = await Property.findByIdAndUpdate(req.params.id, { deleted: true });
+        const property = await Property.findOneAndUpdate({ _id: req.params.id, ...ownerFilter(req) }, { deleted: true });
+        if (!property) {
+            return res.status(404).json({ message: "no Data Found." })
+        }
         res.status(200).json({ message: "done", property })
     } catch (err) {
         res.status(404).json({ message: "error", err })
@@ -65,58 +74,27 @@ const deleteData = async (req, res) => {
 
 const deleteMany = async (req, res) => {
     try {
-        const property = await Property.updateMany({ _id: { $in: req.body } }, { $set: { deleted: true } });
+        const property = await Property.updateMany({ _id: { $in: req.body }, ...ownerFilter(req) }, { $set: { deleted: true } });
         res.status(200).json({ message: "done", property })
     } catch (err) {
         res.status(404).json({ message: "error", err })
     }
 }
 
-// const storage = multer.diskStorage({
-// destination: function (req, file, cb) {
-//     const uploadDir = 'uploads/Property/PropertyPhotos';
-//     fs.mkdirSync(uploadDir, { recursive: true });
-//     cb(null, uploadDir);
-// },
-// filename: function (req, file, cb) {
-//     const uploadDir = 'uploads/Property';
-//     const filePath = path.join(uploadDir, file.originalname);
-
-//     // Check if the file already exists in the destination directory
-//     if (fs.existsSync(filePath)) {
-//         // For example, you can append a timestamp to the filename to make it unique
-//         const timestamp = Date.now() + Math.floor(Math.random() * 90);
-//         cb(null, file.originalname.split('.')[0] + '-' + timestamp + '.' + file.originalname.split('.')[1]);
-//     } else {
-//         cb(null, file.originalname);
-//     }
-// },
-// });
-
-const upload = multer({
+const storage = (uploadDir) => multer({
     storage: multer.diskStorage({
         destination: function (req, file, cb) {
-            const uploadDir = 'uploads/Property/PropertyPhotos';
             fs.mkdirSync(uploadDir, { recursive: true });
             cb(null, uploadDir);
         },
         filename: function (req, file, cb) {
-            const uploadDir = 'uploads/Property/PropertyPhotos';
-            const filePath = path.join(uploadDir, file.originalname);
-
-            // Check if the file already exists in the destination directory
-            if (fs.existsSync(filePath)) {
-                // For example, you can append a timestamp to the filename to make it unique
-                const timestamp = Date.now() + Math.floor(Math.random() * 90);
-                cb(null, file.originalname.split('.')[0] + '-' + timestamp + '.' + file.originalname.split('.')[1]);
-            } else {
-                cb(null, file.originalname);
-            }
+            cb(null, uniqueFileName(uploadDir, file.originalname));
         },
     })
 });
 
-const propertyPhoto = async (req, res) => {
+// Adds the uploaded files to one of the media arrays of the property
+const saveMedia = (field, publicPath, withFileName = false) => async (req, res) => {
     try {
         const { id } = req.params
 
@@ -126,158 +104,36 @@ const propertyPhoto = async (req, res) => {
         }
         const url = req.protocol + '://' + req.get('host');
 
-        const file = req?.files.map((file) => ({
-            img: `${url}/api/property/property-photos/${file.filename}`,
+        const file = req.files.map((file) => ({
+            ...(withFileName && { filename: file.filename }),
+            img: `${url}/api/property/${publicPath}/${file.filename}`,
             createOn: new Date(),
         }));
-        // Update the "photos" field for the existing document
-        // await Property.updateOne({ _id: id }, { $set: { propertyPhotos: file } });
-        await Property.updateOne({ _id: id }, { $push: { propertyPhotos: { $each: file } } });
-        res.send('File uploaded successfully.');
-    } catch (err) {
-        console.error('Failed to create Property:', err);
-        res.status(400).json({ error: 'Failed to create Property' });
-    }
-}
-// --
-const virtualTours = multer({
-    storage: multer.diskStorage({
-        destination: function (req, file, cb) {
-            const uploadDir = 'uploads/Property/virtual-tours-or-videos';
-            fs.mkdirSync(uploadDir, { recursive: true });
-            cb(null, uploadDir);
-        },
-        filename: function (req, file, cb) {
-            const uploadDir = 'uploads/Property/virtual-tours-or-videos';
-            const filePath = path.join(uploadDir, file.originalname);
 
-            // Check if the file already exists in the destination directory
-            if (fs.existsSync(filePath)) {
-                // For example, you can append a timestamp to the filename to make it unique
-                const timestamp = Date.now() + Math.floor(Math.random() * 90);
-                cb(null, file.originalname.split('.')[0] + '-' + timestamp + '.' + file.originalname.split('.')[1]);
-            } else {
-                cb(null, file.originalname);
-            }
-        },
-    })
-});
-
-const VirtualToursorVideos = async (req, res) => {
-    try {
-        const { id } = req.params
-
-        if (!req.files || req.files.length === 0) {
-            res.status(400).send('No files uploaded.');
-            return;
+        const result = await Property.updateOne({ _id: id, ...ownerFilter(req) }, { $push: { [field]: { $each: file } } });
+        if (result.matchedCount === 0) {
+            await removeUploadedFiles(req.files);
+            return res.status(404).json({ message: "no Data Found." })
         }
-        const url = req.protocol + '://' + req.get('host');
-
-        const file = req?.files.map((file) => ({
-            img: `${url}/api/property/virtual-tours-or-videos/${file.filename}`,
-            createOn: new Date(),
-        }));
-
-        await Property.updateOne({ _id: id }, { $push: { virtualToursOrVideos: { $each: file } } });
         res.send('File uploaded successfully.');
     } catch (err) {
         console.error('Failed to create Property:', err);
+        await removeUploadedFiles(req.files);
         res.status(400).json({ error: 'Failed to create Property' });
     }
 }
 
-const FloorPlansStorage = multer({
-    storage: multer.diskStorage({
-        destination: function (req, file, cb) {
-            const uploadDir = 'uploads/Property/floor-plans';
-            fs.mkdirSync(uploadDir, { recursive: true });
-            cb(null, uploadDir);
-        },
-        filename: function (req, file, cb) {
-            const uploadDir = 'uploads/Property/floor-plans';
-            const filePath = path.join(uploadDir, file.originalname);
+const upload = storage('uploads/Property/PropertyPhotos');
+const propertyPhoto = saveMedia('propertyPhotos', 'property-photos');
 
-            // Check if the file already exists in the destination directory
-            if (fs.existsSync(filePath)) {
-                // For example, you can append a timestamp to the filename to make it unique
-                const timestamp = Date.now() + Math.floor(Math.random() * 90);
-                cb(null, file.originalname.split('.')[0] + '-' + timestamp + '.' + file.originalname.split('.')[1]);
-            } else {
-                cb(null, file.originalname);
-            }
-        },
-    })
-});
+const virtualTours = storage('uploads/Property/virtual-tours-or-videos');
+const VirtualToursorVideos = saveMedia('virtualToursOrVideos', 'virtual-tours-or-videos');
 
-const FloorPlans = async (req, res) => {
-    try {
-        const { id } = req.params
+const FloorPlansStorage = storage('uploads/Property/floor-plans');
+const FloorPlans = saveMedia('floorPlans', 'floor-plans');
 
-        if (!req.files || req.files.length === 0) {
-            res.status(400).send('No files uploaded.');
-            return;
-        }
-        const url = req.protocol + '://' + req.get('host');
-
-        const file = req?.files.map((file) => ({
-            img: `${url}/api/property/floor-plans/${file.filename}`,
-            createOn: new Date(),
-        }));
-
-        await Property.updateOne({ _id: id }, { $push: { floorPlans: { $each: file } } });
-        res.send('File uploaded successfully.');
-    } catch (err) {
-        console.error('Failed to create Property:', err);
-        res.status(400).json({ error: 'Failed to create Property' });
-    }
-}
-// --
-const PropertyDocumentsStorage = multer({
-    storage: multer.diskStorage({
-        destination: function (req, file, cb) {
-            const uploadDir = 'uploads/Property/property-documents';
-            fs.mkdirSync(uploadDir, { recursive: true });
-            cb(null, uploadDir);
-        },
-        filename: function (req, file, cb) {
-            const uploadDir = 'uploads/Property/property-documents';
-            const filePath = path.join(uploadDir, file.originalname);
-
-            // Check if the file already exists in the destination directory
-            if (fs.existsSync(filePath)) {
-                // For example, you can append a timestamp to the filename to make it unique
-                const timestamp = Date.now() + Math.floor(Math.random() * 90);
-                cb(null, file.originalname.split('.')[0] + '-' + timestamp + '.' + file.originalname.split('.')[1]);
-            } else {
-                cb(null, file.originalname);
-            }
-        },
-    })
-});
-
-const PropertyDocuments = async (req, res) => {
-    try {
-        const { id } = req.params
-
-        if (!req.files || req.files.length === 0) {
-            res.status(400).send('No files uploaded.');
-            return;
-        }
-        const url = req.protocol + '://' + req.get('host');
-
-        const file = req?.files.map((file) => ({
-            filename: file.filename,
-            img: `${url}/api/property/property-documents/${file.filename}`,
-            createOn: new Date(),
-        }));
-
-        await Property.updateOne({ _id: id }, { $push: { propertyDocuments: { $each: file } } });
-        res.send('File uploaded successfully.');
-    } catch (err) {
-        console.error('Failed to create Property:', err);
-        res.status(400).json({ error: 'Failed to create Property' });
-    }
-}
+const PropertyDocumentsStorage = storage('uploads/Property/property-documents');
+const PropertyDocuments = saveMedia('propertyDocuments', 'property-documents', true);
 
 
 

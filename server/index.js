@@ -1,52 +1,11 @@
-const express = require('express');
-const db = require('./db/config')
-const route = require('./controllers/route');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const port = 5001
 require('dotenv').config()
-const fs = require('fs');
-const path = require('path');
+const db = require('./db/config')
+const app = require('./app');
+const port = process.env.PORT || 5001
 
-//Setup Express App
-const app = express();
-// Middleware
-app.use(bodyParser.json());
-// Set up CORS  
-app.use(cors())
-//API Routes
-app.use('/api', route);
-
-app.get('/', async (req, res) => {
-
-    res.send('Welcome to my world...')
-
-    //! for Delete folder ./uploads
-    // const folderPath = './uploads'; // Use the appropriate path here
-    // try {
-    //     function removeFolderRecursive(folderPath) {
-    //         if (fs.existsSync(folderPath)) {
-    //             fs.readdirSync(folderPath).forEach(file => {
-    //                 const curPath = path.join(folderPath, file);
-
-    //                 if (fs.lstatSync(curPath).isDirectory()) {
-    //                     removeFolderRecursive(curPath); // Recursive call for subdirectories
-    //                 } else {
-    //                     fs.unlinkSync(curPath); // Delete file
-    //                 }
-    //             });
-
-    //             fs.rmdirSync(folderPath); // Remove empty directory
-    //             console.log(`Folder ${folderPath} and its contents have been removed.`);
-    //         }
-    //     }
-    //     removeFolderRecursive(folderPath);
-    //     res.send({ message: `Folder ${folderPath} and its contents have been removed.` });
-    // } catch (err) {
-    //     console.error(`Error removing folder: ${err.message}`);
-    //     res.status(500).send({ message: `Error removing folder: ${err.message}` });
-    // }
-});
+if (!process.env.JWT_SECRET) {
+    console.warn('WARNING: JWT_SECRET is not set, falling back to the insecure default key. Set JWT_SECRET in server/.env for production.');
+}
 
 // Get port from environment and store in Express.
 

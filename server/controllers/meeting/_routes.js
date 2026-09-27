@@ -1,6 +1,7 @@
 const express = require('express');
 const auth = require('../../middelwares/auth');
-const meeting = require('./meeting')
+const { wrapController } = require('../../middelwares/errorHandler');
+const meeting = wrapController(require('./meeting'))
 
 const router = express.Router();
 

@@ -1,18 +1,18 @@
 const PhoneCall = require('../../model/schema/phoneCall');
 const User = require('../../model/schema/user');
-const mongoose = require('mongoose');
+const { castIds, isValidId, resolveOwner, scopedQuery } = require('../../utils/access');
 
 const add = async (req, res) => {
     try {
         const { sender, recipient, callDuration, startDate, endDate, callNotes, createBy, createByLead } = req.body;
 
-        if (createBy && !mongoose.Types.ObjectId.isValid(createBy)) {
-            res.status(400).json({ error: 'Invalid createBy value' });
+        if (createBy && !isValidId(createBy)) {
+            return res.status(400).json({ error: 'Invalid createBy value' });
         }
-        if (createByLead && !mongoose.Types.ObjectId.isValid(createByLead)) {
-            res.status(400).json({ error: 'Invalid createByLead value' });
+        if (createByLead && !isValidId(createByLead)) {
+            return res.status(400).json({ error: 'Invalid createByLead value' });
         }
-        const phoneCall = { sender, recipient, callDuration, startDate, endDate, callNotes }
+        const phoneCall = { sender: resolveOwner(req, sender), recipient, callDuration, startDate, endDate, callNotes }
 
         if (createBy) {
             phoneCall.createBy = createBy;
@@ -22,12 +22,14 @@ const add = async (req, res) => {
             phoneCall.createByLead = createByLead;
         }
 
-        const user = await User.findById({ _id: phoneCall.sender });
-        user.outboundcall = user.outboundcall + 1;
-        await user.save();
+        if (!await User.exists({ _id: phoneCall.sender, deleted: false })) {
+            return res.status(400).json({ error: 'Invalid sender value' });
+        }
 
         const result = new PhoneCall(phoneCall);
         await result.save();
+        // Only count the call once it is stored
+        await User.updateOne({ _id: phoneCall.sender }, { $inc: { outboundcall: 1 } });
         res.status(200).json({ result });
     } catch (err) {
         console.error('Failed to create :', err);
@@ -38,10 +40,7 @@ const add = async (req, res) => {
 const index = async (req, res) => {
     try {
 
-        const query = req.query
-        if (query.sender) {
-            query.sender = new mongoose.Types.ObjectId(query.sender);
-        }
+        const query = castIds(scopedQuery(req, 'sender'), ['sender'])
         let result = await PhoneCall.aggregate([
             { $match: query },
             {

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose')
 const Contact = require('../../model/schema/contact')
 const emailHistory = require('../../model/schema/email')
 const MeetingHistory = require('../../model/schema/meeting')
@@ -5,9 +6,10 @@ const phoneCall = require('../../model/schema/phoneCall')
 const Task = require('../../model/schema/task')
 const TextMsg = require('../../model/schema/textMsg')
 const DocumentSchema = require('../../model/schema/document')
+const { ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access')
 
 const index = async (req, res) => {
-    const query = req.query
+    const query = scopedQuery(req)
     query.deleted = false;
 
     let allData = await Contact.find(query).populate({
@@ -16,17 +18,13 @@ const index = async (req, res) => {
     }).exec()
 
     const result = allData.filter(item => item.createBy !== null);
-
-    try {
-        res.send(result)
-    } catch (error) {
-        res.send(error)
-    }
+    res.send(result)
 }
 
 const add = async (req, res) => {
     try {
         req.body.createdDate = new Date();
+        req.body.createBy = resolveOwner(req, req.body.createBy);
         const user = new Contact(req.body);
         await user.save();
         res.status(200).json(user);
@@ -39,7 +37,13 @@ const add = async (req, res) => {
 const addPropertyInterest = async (req, res) => {
     try {
         const { id } = req.params
-        await Contact.updateOne({ _id: id }, { $set: { interestProperty: req.body } });
+        if (!Array.isArray(req.body)) {
+            return res.status(400).json({ error: 'An array of property ids is expected' });
+        }
+        const result = await Contact.updateOne({ _id: id, ...ownerFilter(req) }, { $set: { interestProperty: req.body } });
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'No data found.' });
+        }
         res.send(' uploaded successfully.');
     } catch (err) {
         console.error('Failed to create Contact:', err);
@@ -49,10 +53,16 @@ const addPropertyInterest = async (req, res) => {
 
 const edit = async (req, res) => {
     try {
+        // The owner of a contact never changes through edit (the web client sends
+        // the id of whoever is editing as createBy)
+        const { createBy, ...data } = req.body;
         let result = await Contact.updateOne(
-            { _id: req.params.id },
-            { $set: req.body }
+            { _id: req.params.id, ...ownerFilter(req) },
+            { $set: { ...data, updatedDate: new Date() } }
         );
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'No data found.' });
+        }
         res.status(200).json(result);
     } catch (err) {
         console.error('Failed to Update Contact:', err);
@@ -62,10 +72,10 @@ const edit = async (req, res) => {
 
 const view = async (req, res) => {
     try {
-        let contact = await Contact.findOne({ _id: req.params.id });
-        let interestProperty = await Contact.findOne({ _id: req.params.id }).populate("interestProperty")
-
+        let contact = await Contact.findOne({ _id: req.params.id, ...ownerFilter(req) });
         if (!contact) return res.status(404).json({ message: 'No data found.' })
+        let interestProperty = await Contact.findOne({ _id: contact._id }).populate("interestProperty")
+
         let EmailHistory = await emailHistory.aggregate([
             { $match: { createBy: contact._id } },
             {
@@ -365,6 +375,9 @@ const view = async (req, res) => {
         res.status(200).json({ interestProperty, contact, EmailHistory, phoneCallHistory, meetingHistory, textMsg, task, Document });
     }
     catch (error) {
+        if (error instanceof mongoose.Error.CastError) {
+            return res.status(400).json({ message: 'Invalid id.' });
+        }
         console.error(error);
         res.status(500).json({ error, err: 'An error occurred.' });
     }
@@ -372,7 +385,10 @@ const view = async (req, res) => {
 
 const deleteData = async (req, res) => {
     try {
-        const contact = await Contact.findByIdAndUpdate(req.params.id, { deleted: true });
+        const contact = await Contact.findOneAndUpdate({ _id: req.params.id, ...ownerFilter(req) }, { deleted: true });
+        if (!contact) {
+            return res.status(404).json({ message: 'No data found.' })
+        }
         res.status(200).json({ message: "done", contact })
     } catch (err) {
         res.status(404).json({ message: "error", err })
@@ -381,7 +397,7 @@ const deleteData = async (req, res) => {
 
 const deleteMany = async (req, res) => {
     try {
-        const contact = await Contact.updateMany({ _id: { $in: req.body } }, { $set: { deleted: true } });
+        const contact = await Contact.updateMany({ _id: { $in: req.body }, ...ownerFilter(req) }, { $set: { deleted: true } });
         res.status(200).json({ message: "done", contact })
     } catch (err) {
         res.status(404).json({ message: "error", err })

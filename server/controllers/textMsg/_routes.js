@@ -1,6 +1,7 @@
 const express = require('express');
 const auth = require('../../middelwares/auth');
-const textMsg = require('./textMsg')
+const { wrapController } = require('../../middelwares/errorHandler');
+const textMsg = wrapController(require('./textMsg'))
 
 const router = express.Router();
 

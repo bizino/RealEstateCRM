@@ -31,4 +31,12 @@ const user = new mongoose.Schema({
     },
 })
 
+// Never send password hashes to clients (also covers populated `createBy` users)
+user.set('toJSON', {
+    transform: (doc, ret) => {
+        delete ret.password;
+        return ret;
+    },
+});
+
 module.exports = mongoose.model('User', user)

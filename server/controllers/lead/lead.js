@@ -4,9 +4,10 @@ const PhoneCall = require('../../model/schema/phoneCall');
 const Task = require('../../model/schema/task')
 const MeetingHistory = require('../../model/schema/meeting')
 const DocumentSchema = require('../../model/schema/document')
+const { ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access')
 
 const index = async (req, res) => {
-    const query = req.query
+    const query = scopedQuery(req)
     query.deleted = false;
 
     // let result = await Lead.find(query)
@@ -22,7 +23,11 @@ const index = async (req, res) => {
 
 const addMany = async (req, res) => {
     try {
-        const data = req.body;
+        if (!Array.isArray(req.body)) {
+            return res.status(400).json({ error: 'An array of leads is expected' });
+        }
+        const createdDate = new Date();
+        const data = req.body.map((lead) => ({ ...lead, createdDate, createBy: resolveOwner(req, lead.createBy) }));
         const insertedLead = await Lead.insertMany(data);
 
         res.status(200).json(insertedLead);
@@ -35,6 +40,7 @@ const addMany = async (req, res) => {
 const add = async (req, res) => {
     try {
         req.body.createdDate = new Date();
+        req.body.createBy = resolveOwner(req, req.body.createBy);
         const user = new Lead(req.body);
         await user.save();
         res.status(200).json(user);
@@ -46,10 +52,16 @@ const add = async (req, res) => {
 
 const edit = async (req, res) => {
     try {
+        // The owner never changes through edit (the web client sends the id of
+        // whoever is editing as createBy)
+        const { createBy, ...data } = req.body;
         let result = await Lead.updateOne(
-            { _id: req.params.id },
-            { $set: req.body }
+            { _id: req.params.id, ...ownerFilter(req) },
+            { $set: { ...data, updatedDate: new Date() } }
         );
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'no Data Found.' });
+        }
         res.status(200).json(result);
     } catch (err) {
         console.error('Failed to Update Lead:', err);
@@ -58,14 +70,8 @@ const edit = async (req, res) => {
 }
 
 const view = async (req, res) => {
-    let lead = await Lead.findOne({ _id: req.params.id })
+    let lead = await Lead.findOne({ _id: req.params.id, ...ownerFilter(req) })
     if (!lead) return res.status(404).json({ message: "no Data Found." })
-
-    let query = req.query
-    if (query.sender) {
-        query.sender = new mongoose.Types.ObjectId(query.sender);
-    }
-    query.createByLead = req.params.id
 
     let Email = await EmailHistory.aggregate([
         { $match: { createByLead: lead._id } },
@@ -153,7 +159,7 @@ const view = async (req, res) => {
         { $match: { assignmentToLead: lead._id } },
         {
             $lookup: {
-                from: 'lead',
+                from: 'leads',
                 localField: 'assignmentToLead',
                 foreignField: '_id',
                 as: 'lead'
@@ -190,8 +196,8 @@ const view = async (req, res) => {
         },
         {
             $lookup: {
-                from: 'lead',
-                localField: 'assignmentToLead',
+                from: 'leads',
+                localField: 'attendesLead',
                 foreignField: '_id',
                 as: 'lead'
             }
@@ -213,6 +219,7 @@ const view = async (req, res) => {
         },
         {
             $project: {
+                lead: 0,
                 users: 0
             }
         }
@@ -246,7 +253,10 @@ const view = async (req, res) => {
 
 const deleteData = async (req, res) => {
     try {
-        const lead = await Lead.findByIdAndUpdate(req.params.id, { deleted: true });
+        const lead = await Lead.findOneAndUpdate({ _id: req.params.id, ...ownerFilter(req) }, { deleted: true });
+        if (!lead) {
+            return res.status(404).json({ message: "no Data Found." })
+        }
         res.status(200).json({ message: "done", lead })
     } catch (err) {
         res.status(404).json({ message: "error", err })
@@ -255,7 +265,7 @@ const deleteData = async (req, res) => {
 
 const deleteMany = async (req, res) => {
     try {
-        const lead = await Lead.updateMany({ _id: { $in: req.body } }, { $set: { deleted: true } });
+        const lead = await Lead.updateMany({ _id: { $in: req.body }, ...ownerFilter(req) }, { $set: { deleted: true } });
         res.status(200).json({ message: "done", lead })
     } catch (err) {
         res.status(404).json({ message: "error", err })

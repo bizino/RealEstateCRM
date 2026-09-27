@@ -1,9 +1,9 @@
 const MeetingHistory = require('../../model/schema/meeting')
-const mongoose = require('mongoose');
+const { castIds, resolveOwner, scopedQuery } = require('../../utils/access');
 
 const add = async (req, res) => {
     try {
-        const result = new MeetingHistory(req.body);
+        const result = new MeetingHistory({ ...req.body, createdBy: resolveOwner(req, req.body.createdBy) });
         await result.save();
         res.status(200).json(result);
     } catch (err) {
@@ -14,10 +14,7 @@ const add = async (req, res) => {
 
 const index = async (req, res) => {
     try {
-        const query = req.query
-        if (query.createdBy) {
-            query.createdBy = new mongoose.Types.ObjectId(query.createdBy);
-        }
+        const query = castIds(scopedQuery(req, 'createdBy'), ['createdBy'])
 
         const meetings = await MeetingHistory.aggregate([
             { $match: query },
