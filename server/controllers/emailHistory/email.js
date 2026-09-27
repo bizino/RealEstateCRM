@@ -1,7 +1,8 @@
 const { sendEmail } = require('../../middelwares/mail');
 const EmailHistory = require('../../model/schema/email');
 const User = require('../../model/schema/user');
-const { castIds, isValidId, resolveOwner, scopedQuery } = require('../../utils/access');
+const { castIds, isValidId, ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access');
+const { nameExpr } = require('../../utils/names');
 
 const add = async (req, res) => {
     try {
@@ -75,7 +76,7 @@ const index = async (req, res) => {
             { $match: { 'users.deleted': false } },
             {
                 $addFields: {
-                    senderName: { $concat: ['$users.firstName', ' ', '$users.lastName'] },
+                    senderName: nameExpr('$users'),
                     deleted: {
                         $cond: [
                             { $eq: ['$createByRef.deleted', false] },
@@ -86,8 +87,8 @@ const index = async (req, res) => {
                     createByName: {
                         $cond: {
                             if: '$createByRef',
-                            then: { $concat: ['$createByRef.title', ' ', '$createByRef.firstName', ' ', '$createByRef.lastName'] },
-                            else: { $concat: ['$createByrefLead.leadName'] }
+                            then: nameExpr('$createByRef'),
+                            else: { $ifNull: ['$createByrefLead.leadName', ''] }
                         }
                     },
                 }
@@ -111,7 +112,7 @@ const index = async (req, res) => {
 
 const view = async (req, res) => {
     try {
-        let result = await EmailHistory.findOne({ _id: req.params.id })
+        let result = await EmailHistory.findOne({ _id: req.params.id, ...ownerFilter(req, 'sender') })
 
         if (!result) return res.status(404).json({ message: "no Data Found." })
 
@@ -148,6 +149,7 @@ const view = async (req, res) => {
             {
                 $addFields: {
                     senderEmail: '$users.username',
+                    senderName: nameExpr('$users'),
                     deleted: {
                         $cond: [
                             { $eq: ['$createByRef.deleted', false] },
@@ -158,8 +160,8 @@ const view = async (req, res) => {
                     createByName: {
                         $cond: {
                             if: '$createByRef',
-                            then: { $concat: ['$createByRef.title', ' ', '$createByRef.firstName', ' ', '$createByRef.lastName'] },
-                            else: { $concat: ['$createByrefLead.leadName'] }
+                            then: nameExpr('$createByRef'),
+                            else: { $ifNull: ['$createByrefLead.leadName', ''] }
                         }
                     },
                 }

@@ -14,6 +14,8 @@ const phoneCallRoute = require('./phoneCall/_routes');
 const TextMsgRoute = require('./textMsg/_routes');
 const meetingRoute = require('./meeting/_routes');
 const paymentRoute = require('./payment/_routes');
+const dealRoute = require('./deal/_routes');
+const dashboardRoute = require('./dashboard/_routes');
 
 //Api`s
 router.use('/contact', contactRoute);
@@ -24,6 +26,8 @@ router.use('/document', documentRoute);
 router.use('/reporting', reportingRoute);
 router.use('/user', userRoute);
 router.use('/payment', paymentRoute);
+router.use('/deal', dealRoute);
+router.use('/dashboard', dashboardRoute);
 
 router.use('/email', emailRoute);
 router.use('/phoneCall', phoneCallRoute);

@@ -38,9 +38,11 @@ describe('POST /api/document/add', () => {
         expect(folder.file.map((f) => f.fileName).sort()).toEqual([expect.stringMatching(/^a(-\d+)?\.pdf$/), expect.stringMatching(/^b(-\d+)?\.pdf$/)]);
         expect(folder.createBy.toString()).toBe(user._id.toString());
 
+        // Documents are only served through the authenticated download endpoint
         const img = new URL(folder.file[0].img);
-        const served = await api().get(img.pathname);
-        expect(served.status).toBe(200);
+        expect(img.pathname).toBe(`/api/document/download/${folder.file[0]._id}`);
+        expect((await api().get(img.pathname)).status).toBe(401);
+        expect((await api().get(img.pathname).set('Authorization', token)).status).toBe(200);
     });
 
     test('appends files to an existing folder of the same user', async () => {
@@ -132,19 +134,33 @@ describe('document download, link and delete', () => {
     };
 
     test('downloads a file as an attachment', async () => {
-        const { file } = await uploadOne();
-        const res = await api().get(`/api/document/download/${file._id}`);
+        const { file, token } = await uploadOne();
+        const res = await api().get(`/api/document/download/${file._id}`).set('Authorization', token);
         expect(res.status).toBe(200);
         expect(res.headers['content-disposition']).toMatch(/^attachment; filename="hello(-\d+)?\.txt"$/);
         expect(res.text).toBe('hello world');
     });
 
     test('download returns 404 for an unknown file, a missing file on disk and 400 for an invalid id', async () => {
-        const { file } = await uploadOne();
-        expect((await api().get(`/api/document/download/${objectId()}`)).status).toBe(404);
-        expect((await api().get('/api/document/download/abc')).status).toBe(400);
+        const { file, token } = await uploadOne();
+        expect((await api().get(`/api/document/download/${objectId()}`).set('Authorization', token)).status).toBe(404);
+        expect((await api().get('/api/document/download/abc').set('Authorization', token)).status).toBe(400);
         fs.unlinkSync(path.resolve(file.path));
-        expect((await api().get(`/api/document/download/${file._id}`)).status).toBe(404);
+        expect((await api().get(`/api/document/download/${file._id}`).set('Authorization', token)).status).toBe(404);
+    });
+
+    test('only the uploader, the employee in charge of the linked customer and admins may download', async () => {
+        const { file, token } = await uploadOne();
+        const other = await createUserWithToken();
+        const admin = await createUserWithToken({ role: 'admin' });
+        expect((await api().get(`/api/document/download/${file._id}`)).status).toBe(401);
+        expect((await api().get(`/api/document/download/${file._id}`).set('Authorization', other.token)).status).toBe(404);
+        expect((await api().get(`/api/document/download/${file._id}`).set('Authorization', admin.token)).status).toBe(200);
+
+        // a file linked to a customer of another employee is readable by that employee
+        const contact = await Contact.create({ fullName: 'Khách của người khác', createBy: other.user._id });
+        await api().post(`/api/document/link-document/${file._id}`).set('Authorization', token).send({ linkContact: contact._id });
+        expect((await api().get(`/api/document/download/${file._id}`).set('Authorization', other.token)).status).toBe(200);
     });
 
     test('links a file to a contact and then to a lead', async () => {
@@ -186,5 +202,16 @@ describe('document download, link and delete', () => {
         const { token, file } = await uploadOne();
         expect((await api().delete(`/api/document/delete/${file._id}`)).status).toBe(401);
         expect((await api().delete(`/api/document/delete/${objectId()}`).set('Authorization', token)).status).toBe(404);
+    });
+});
+
+describe('Vietnamese file names', () => {
+    test('are kept readable on upload', async () => {
+        const { user, token } = await createUserWithToken();
+        const res = await upload(token, { folderName: 'Hợp đồng', createBy: user._id, files: [['pdf', 'Sổ hồng căn 1508.pdf']] });
+        expect(res.status).toBe(200);
+        const folder = await DocumentSchema.findOne({ folderName: 'Hợp đồng' });
+        expect(folder.file[0].fileName).toMatch(/^Sổ hồng căn 1508(-\d+)?\.pdf$/);
+        expect(path.basename(folder.file[0].path)).toMatch(/^Sổ hồng căn 1508(-\d+)?\.pdf$/);
     });
 });

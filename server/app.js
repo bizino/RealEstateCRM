@@ -6,10 +6,10 @@ const { errorHandler } = require('./middelwares/errorHandler');
 
 //Setup Express App
 const app = express();
-// Middleware
-app.use(bodyParser.json());
-// Set up CORS
-app.use(cors())
+// Middleware (imports of customers send up to a few thousand rows at once)
+app.use(bodyParser.json({ limit: '5mb' }));
+// Set up CORS; the name of downloaded files is read by the web client
+app.use(cors({ exposedHeaders: ['Content-Disposition'] }))
 //API Routes
 app.use('/api', route);
 

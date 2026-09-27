@@ -1,8 +1,11 @@
 const multer = require('multer');
 const DocumentSchema = require('../../model/schema/document')
 const fs = require('fs');
-const { castIds, isValidId, ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access');
-const { uniqueFileName, removeUploadedFiles } = require('../../utils/upload');
+const Contact = require('../../model/schema/contact');
+const Lead = require('../../model/schema/lead');
+const { castIds, isAdmin, isValidId, ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access');
+const { decodeFileName, uniqueFileName, removeUploadedFiles } = require('../../utils/upload');
+const { nameExpr } = require('../../utils/names');
 
 
 const index = async (req, res) => {
@@ -28,7 +31,7 @@ const index = async (req, res) => {
                 $group: {
                     _id: '$_id',  // Group by the document _id (folder's _id)
                     folderName: { $first: '$folderName' }, // Get the folderName (assuming it's the same for all files in the folder)
-                    createByName: { $first: { $concat: ['$creatorInfo.firstName', ' ', '$creatorInfo.lastName'] } },
+                    createByName: { $first: nameExpr('$creatorInfo') },
                     files: { $push: '$file' }, // Push the matching files back into an array
                 }
             },
@@ -52,7 +55,7 @@ const storage = multer.diskStorage({
     },
     filename: function (req, file, cb) {
         // A timestamp is added when a file with the same name already exists
-        cb(null, uniqueFileName('uploads/document/', file.originalname));
+        cb(null, uniqueFileName('uploads/document/', decodeFileName(file.originalname)));
     },
 });
 
@@ -78,7 +81,6 @@ const file = async (req, res) => {
         const files = req.files.map((file) => ({
             fileName: filename || file.filename,
             path: file.path,
-            img: `${url}/api/document/images/${file.filename}`,
             createOn: new Date(),
         }));
 
@@ -95,6 +97,11 @@ const file = async (req, res) => {
         } else {
             folder.file.push(...files); // Use spread operator to add elements of the files array
         }
+
+        // Files are read through the authenticated download endpoint
+        folder.file.slice(-files.length).forEach((saved) => {
+            saved.img = `${url}/api/document/download/${saved._id}`;
+        });
 
         // Save the folder in the database
         await folder.save();
@@ -126,7 +133,18 @@ const downloadFile = async (req, res) => {
         const file = folder.file.find((f) => f._id.toString() === id);
 
 
-        if (!file) {
+        if (!file || file.deleted) {
+            return res.status(404).json({ message: 'File not found' });
+        }
+
+        // Documents hold personal data (ids, contracts): only the uploader, the
+        // employee in charge of the linked customer and admins may read them
+        const me = String(req.user.userId);
+        const allowed = isAdmin(req)
+            || String(folder.createBy) === me
+            || (file.linkContact && await Contact.exists({ _id: file.linkContact, createBy: me }))
+            || (file.linkLead && await Lead.exists({ _id: file.linkLead, createBy: me }));
+        if (!allowed) {
             return res.status(404).json({ message: 'File not found' });
         }
 

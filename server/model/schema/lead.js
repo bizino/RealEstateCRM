@@ -35,6 +35,17 @@ const leadSchema = new mongoose.Schema({
     leadConversionRate: Number,
     leadNurturingStage: String,
     leadNextAction: String,
+    // Needs of the customer, copied to the contact on conversion
+    customerType: String,
+    budgetFrom: Number,
+    budgetTo: Number,
+    interestedArea: String,
+    interestedPropertyType: String,
+    // Contact created (or found) when the lead was converted
+    convertedContact: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Contact',
+    },
     deleted: {
         type: Boolean,
         default: false,

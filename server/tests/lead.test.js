@@ -95,8 +95,8 @@ describe('GET /api/lead/view/:id', () => {
         expect(res.body.task).toHaveLength(1);
         expect(res.body.task[0].assignmentToName).toBe('Alice Buyer');
         expect(res.body.meeting).toHaveLength(1);
-        expect(res.body.meeting[0].attendesArray).toEqual(['alice@example.com']);
-        expect(res.body.meeting[0].createdByName).toBe(user.username);
+        expect(res.body.meeting[0].attendesArray).toEqual(['Alice Buyer']);
+        expect(res.body.meeting[0].createdByName).toBe(`${user.firstName} ${user.lastName}`);
     });
 
     test('accepts a sender filter in the query string', async () => {

@@ -8,6 +8,7 @@ const router = express.Router();
 
 router.post('/admin-register', auth, requireAdmin, user.adminRegister)
 router.get('/', auth, requireAdmin, user.index)
+router.get('/options', auth, user.options)
 router.post('/register', auth, requireAdmin, user.register)
 router.post('/login', user.login)
 router.post('/deleteMany', auth, requireAdmin, user.deleteMany)

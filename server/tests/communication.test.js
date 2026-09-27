@@ -77,7 +77,7 @@ describe('email history', () => {
         expect(res.status).toBe(200);
         const bySubject = Object.fromEntries(res.body.map((e) => [e.subject, e]));
         expect(Object.keys(bySubject).sort()).toEqual(['to contact', 'to lead']);
-        expect(bySubject['to contact'].createByName).toBe('Mr. John Doe');
+        expect(bySubject['to contact'].createByName).toBe('John Doe');
         expect(bySubject['to lead'].createByName).toBe('Lead One');
         expect(bySubject['to contact'].senderName).toBe('Agent Smith');
 
@@ -95,7 +95,7 @@ describe('email history', () => {
         const res = await api().get(`/api/email/view/${email._id}`).set('Authorization', token);
         expect(res.status).toBe(200);
         expect(res.body.senderEmail).toBe(user.username);
-        expect(res.body.createByName).toBe('Mr. John Doe');
+        expect(res.body.createByName).toBe('John Doe');
         expect((await api().get(`/api/email/view/${objectId()}`).set('Authorization', token)).status).toBe(404);
         expect((await api().get('/api/email/view/nope').set('Authorization', token)).status).toBe(400);
     });
@@ -132,7 +132,7 @@ describe('phone calls', () => {
         const res = await api().get(`/api/phoneCall?sender=${user._id}`).set('Authorization', token);
         expect(res.status).toBe(200);
         const byNotes = Object.fromEntries(res.body.map((c) => [c.callNotes, c]));
-        expect(byNotes['contact call'].createByName).toBe('Mr. John Doe');
+        expect(byNotes['contact call'].createByName).toBe('John Doe');
         expect(byNotes['lead call'].createByName).toBe('Lead One');
     });
 
@@ -177,7 +177,7 @@ describe('text messages', () => {
         const list = await api().get(`/api/text-msg?sender=${user._id}`).set('Authorization', token);
         expect(list.status).toBe(200);
         expect(list.body).toHaveLength(1);
-        expect(list.body[0].createByName).toBe('Mr. John Doe');
+        expect(list.body[0].createByName).toBe('John Doe');
 
         const view = await api().get(`/api/text-msg/view/${msg._id}`).set('Authorization', token);
         expect(view.status).toBe(200);
@@ -188,5 +188,41 @@ describe('text messages', () => {
     test('GET /api/text-msg returns 400 for an invalid sender filter', async () => {
         const { token } = await setup('admin');
         expect((await api().get('/api/text-msg?sender=bad').set('Authorization', token)).status).toBe(400);
+    });
+});
+
+describe('privacy of the communication logs', () => {
+    test('a regular user cannot open the calls, emails and texts of another user', async () => {
+        const a = await createUserWithToken();
+        const b = await createUserWithToken();
+        const admin = await createUserWithToken({ role: 'admin' });
+        const call = await api().post('/api/phoneCall/add').set('Authorization', a.token).send({ recipient: '0901234567', callNotes: 'Tư vấn', callResult: 'answered' });
+        expect(call.status).toBe(200);
+        expect(call.body.result.callResult).toBe('answered');
+        const email = await api().post('/api/email/add').set('Authorization', a.token).send({ recipient: 'khach@example.com', subject: 'Báo giá' });
+        expect(email.status).toBe(200);
+
+        expect((await api().get(`/api/phoneCall/view/${call.body.result._id}`).set('Authorization', b.token)).status).toBe(404);
+        expect((await api().get(`/api/email/view/${email.body.result._id}`).set('Authorization', b.token)).status).toBe(404);
+        expect((await api().get(`/api/phoneCall/view/${call.body.result._id}`).set('Authorization', a.token)).status).toBe(200);
+        expect((await api().get(`/api/email/view/${email.body.result._id}`).set('Authorization', admin.token)).status).toBe(200);
+    });
+});
+
+describe('calls move new leads forward', () => {
+    test('a lead who answered is "contacted", a lead further in the pipeline is not changed', async () => {
+        const Lead = require('../model/schema/lead');
+        const { user, token } = await createUserWithToken();
+        const [fresh, other, busy] = await Lead.create([
+            { leadName: 'Mới', leadStatus: 'new', createBy: user._id },
+            { leadName: 'Đã hẹn', leadStatus: 'appointment', createBy: user._id },
+            { leadName: 'Không nghe', leadStatus: 'new', createBy: user._id },
+        ]);
+        await api().post('/api/phoneCall/add').set('Authorization', token).send({ createByLead: fresh._id, callResult: 'answered' });
+        await api().post('/api/phoneCall/add').set('Authorization', token).send({ createByLead: other._id, callResult: 'answered' });
+        await api().post('/api/phoneCall/add').set('Authorization', token).send({ createByLead: busy._id, callResult: 'noAnswer' });
+        expect((await Lead.findById(fresh._id)).leadStatus).toBe('contacted');
+        expect((await Lead.findById(other._id)).leadStatus).toBe('appointment');
+        expect((await Lead.findById(busy._id)).leadStatus).toBe('new');
     });
 });

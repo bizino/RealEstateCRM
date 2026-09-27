@@ -1,6 +1,7 @@
 const TextMsg = require('../../model/schema/textMsg');
 const User = require('../../model/schema/user');
-const { castIds, resolveOwner, scopedQuery } = require('../../utils/access');
+const { castIds, ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access');
+const { nameExpr } = require('../../utils/names');
 
 
 const add = async (req, res) => {
@@ -64,9 +65,9 @@ const index = async (req, res) => {
             { $match: { 'contact.deleted': false, 'users.deleted': false } },
             {
                 $addFields: {
-                    senderName: { $concat: ['$users.firstName', ' ', '$users.lastName'] },
+                    senderName: nameExpr('$users'),
                     deleted: '$contact.deleted',
-                    createByName: { $concat: ['$contact.title', ' ', '$contact.firstName', ' ', '$contact.lastName'] },
+                    createByName: nameExpr('$contact'),
                 }
             },
             { $project: { contact: 0, users: 0 } },
@@ -82,7 +83,7 @@ const index = async (req, res) => {
 
 const view = async (req, res) => {
     try {
-        let result = await TextMsg.findOne({ _id: req.params.id })
+        let result = await TextMsg.findOne({ _id: req.params.id, ...ownerFilter(req, 'sender') })
 
         if (!result) return res.status(404).json({ message: "no Data Found." })
 
@@ -109,9 +110,9 @@ const view = async (req, res) => {
             { $match: { 'contact.deleted': false } },
             {
                 $addFields: {
-                    senderName: { $concat: ['$users.firstName', ' ', '$users.lastName'] },
+                    senderName: nameExpr('$users'),
                     deleted: '$contact.deleted',
-                    createByName: { $concat: ['$contact.title', ' ', '$contact.firstName', ' ', '$contact.lastName'] },
+                    createByName: nameExpr('$contact'),
                 }
             },
             { $project: { contact: 0, users: 0 } }

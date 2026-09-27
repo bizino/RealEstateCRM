@@ -150,6 +150,18 @@ describe('GET /api/user', () => {
     });
 });
 
+describe('GET /api/user/options', () => {
+    test('lists the names of the active employees for every user', async () => {
+        const { token, user } = await createUserWithToken({ firstName: 'An', lastName: 'Nguyễn' });
+        await createUser({ deleted: true });
+        const res = await api().get('/api/user/options').set('Authorization', token);
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveLength(1);
+        expect(res.body[0]).toEqual({ _id: user._id.toString(), firstName: 'An', lastName: 'Nguyễn', username: user.username, role: 'user' });
+        expect((await api().get('/api/user/options')).status).toBe(401);
+    });
+});
+
 describe('GET /api/user/view/:id', () => {
     test('a user can view their own profile without the password hash', async () => {
         const { token, user } = await createUserWithToken();
@@ -217,6 +229,27 @@ describe('PUT /api/user/edit/:id', () => {
         const res = await api().put(`/api/user/edit/${other._id}`).set('Authorization', token).send({ firstName: 'ByAdmin' });
         expect(res.status).toBe(200);
         expect((await User.findById(other._id)).firstName).toBe('ByAdmin');
+    });
+
+    test('stores the Vietnamese full name, the position and the broker certificate', async () => {
+        const { token, user } = await createUserWithToken();
+        const res = await api().put(`/api/user/edit/${user._id}`).set('Authorization', token)
+            .send({ fullName: 'Trần  Thị Bích Ngọc', position: 'Chuyên viên tư vấn', brokerCertificate: '123/CCHN-BĐS', phoneNumber: '+84 912 345 678' });
+        expect(res.status).toBe(200);
+        const saved = await User.findById(user._id);
+        expect(saved).toMatchObject({
+            fullName: 'Trần Thị Bích Ngọc', firstName: 'Ngọc', lastName: 'Trần Thị Bích', position: 'Chuyên viên tư vấn',
+            brokerCertificate: '123/CCHN-BĐS', phoneNumber: '0912345678', username: user.username,
+        });
+    });
+
+    test('an admin creates an employee with a full name', async () => {
+        const { token } = await createUserWithToken({ role: 'admin' });
+        const res = await api().post('/api/user/register').set('Authorization', token)
+            .send({ username: 'sale1@congty.vn', password: 'secret123', fullName: 'Lê Văn Sale', position: 'Trưởng nhóm' });
+        expect(res.status).toBe(200);
+        const saved = await User.findOne({ username: 'sale1@congty.vn' });
+        expect(saved).toMatchObject({ fullName: 'Lê Văn Sale', firstName: 'Sale', lastName: 'Lê Văn', position: 'Trưởng nhóm', role: 'user' });
     });
 
     test('rejects changing the username to one that is already taken', async () => {

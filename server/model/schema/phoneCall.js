@@ -9,6 +9,8 @@ const phoneCall = new mongoose.Schema({
     recipient: { type: String },
     callDuration: { type: String },
     callNotes: { type: String },
+    // answered | noAnswer | busy | wrongNumber | callBack
+    callResult: { type: String },
     phoneNumber: { type: String },
     startDate: { type: String, default: Date.now },
     endDate: { type: String },

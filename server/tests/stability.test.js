@@ -86,6 +86,14 @@ test('the server survives malformed requests', async () => {
         () => request(baseUrl).post('/api/task/add').set('Authorization', token).send({ title: 't', assignmentTo: 'not-an-id' }),
         () => request(baseUrl).post('/api/document/add').set('Authorization', token).field('createBy', 'x'),
         () => request(baseUrl).get('/api/contact'),
+        () => request(baseUrl).post('/api/deal/add').set('Authorization', token).send({ contact: 'not-an-id', payments: 'x' }),
+        () => request(baseUrl).put('/api/deal/edit/not-an-id').set('Authorization', token).send({ status: 'deposit' }),
+        () => request(baseUrl).get('/api/deal?contact=not-an-id').set('Authorization', token),
+        () => request(baseUrl).post('/api/lead/convert/not-an-id').set('Authorization', token),
+        () => request(baseUrl).post('/api/contact/import').set('Authorization', token).send([null, 1, 'x', { phoneNumber: { $gt: '' } }]),
+        () => request(baseUrl).get('/api/dashboard/summary?from=x').set('Authorization', token),
+        () => request(baseUrl).put('/api/meeting/edit/not-an-id').set('Authorization', token).send({ property: 'x' }),
+        () => request(baseUrl).post('/api/property/remove-media/not-an-id/propertyPhotos').set('Authorization', token).send({ img: 'a' }),
     ];
 
     for (const attack of attacks) {

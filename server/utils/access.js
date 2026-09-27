@@ -32,4 +32,9 @@ const castIds = (query, fields) => {
 
 const isValidId = (value) => mongoose.Types.ObjectId.isValid(value);
 
-module.exports = { isAdmin, ownerFilter, resolveOwner, sanitizeQuery, scopedQuery, castIds, isValidId };
+// Real estate agencies share their listings: every employee sees every property
+// (the owner's contact details stay private). PROPERTY_VISIBILITY=own restricts
+// employees to the properties they manage, like the other records.
+const sharedInventory = () => process.env.PROPERTY_VISIBILITY !== 'own';
+
+module.exports = { isAdmin, ownerFilter, resolveOwner, sanitizeQuery, scopedQuery, castIds, isValidId, sharedInventory };

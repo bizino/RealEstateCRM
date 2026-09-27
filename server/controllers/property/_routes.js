@@ -11,12 +11,14 @@ router.get('/view/:id', auth, property.view)
 router.put('/edit/:id', auth, property.edit)
 router.delete('/delete/:id', auth, property.deleteData)
 router.post('/deleteMany', auth, property.deleteMany)
+router.post('/remove-media/:id/:field', auth, property.removeMedia)
 router.post('/add-property-photos/:id', auth, property.upload.array('property', 10), property.propertyPhoto)
 router.post('/add-virtual-tours-or-videos/:id', auth, property.virtualTours.array('property', 10), property.VirtualToursorVideos)
 router.post('/add-floor-plans/:id', auth, property.FloorPlansStorage.array('property', 10), property.FloorPlans)
 router.post('/add-property-documents/:id', auth, property.PropertyDocumentsStorage.array('property', 10), property.PropertyDocuments)
 
-router.use('/property-documents', express.static('uploads/Property/property-documents'));
+// Legal papers are private to the employee managing the listing and admins
+router.get('/property-documents/:filename', auth, property.downloadDocument);
 router.use('/floor-plans', express.static('uploads/Property/floor-plans'));
 router.use('/virtual-tours-or-videos', express.static('uploads/Property/virtual-tours-or-videos'));
 router.use('/property-photos', express.static('uploads/Property/PropertyPhotos'));

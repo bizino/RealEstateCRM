@@ -82,7 +82,7 @@ describe('GET /api/task', () => {
         expect(own.status).toBe(200);
         const byTitle = Object.fromEntries(own.body.map((t) => [t.title, t]));
         expect(Object.keys(byTitle).sort()).toEqual(['c', 'l']);
-        expect(byTitle.c.assignmentToName).toBe('Ms. Jane Roe');
+        expect(byTitle.c.assignmentToName).toBe('Jane Roe');
         expect(byTitle.l.assignmentToName).toBe('Big Lead');
 
         expect((await api().get('/api/task').set('Authorization', u2.token)).body.map((t) => t.title)).toEqual(['other']);
@@ -104,7 +104,7 @@ describe('GET /api/task/view/:id', () => {
         const res = await api().get(`/api/task/view/${task._id}`).set('Authorization', token);
         expect(res.status).toBe(200);
         expect(res.body.assignmentToName).toBe('Lead Name');
-        expect(res.body.createByName).toBe(user.username);
+        expect(res.body.createByName).toBe(`${user.firstName} ${user.lastName}`);
     });
 
     test('returns 404 for an unknown id and 400 for an invalid id', async () => {
@@ -183,5 +183,40 @@ describe('DELETE /api/task/delete/:id', () => {
     test('returns 404 for an unknown task', async () => {
         const { token } = await createUserWithToken();
         expect((await api().delete(`/api/task/delete/${objectId()}`).set('Authorization', token)).status).toBe(404);
+    });
+});
+
+describe('task follow-up', () => {
+    test('marks a task done with its completion date, and reopens it', async () => {
+        const { token } = await createUserWithToken();
+        const created = await api().post('/api/task/add').set('Authorization', token).send({ title: 'Gọi lại khách', priority: 'high', start: '2026-10-01' });
+        expect(created.status).toBe(200);
+        expect(created.body).toMatchObject({ status: 'todo', priority: 'high' });
+
+        await api().put(`/api/task/edit/${created.body._id}`).set('Authorization', token).send({ status: 'done' });
+        let saved = await Task.findById(created.body._id);
+        expect(saved.status).toBe('done');
+        expect(saved.completedDate).toBeDefined();
+        expect(saved.title).toBe('Gọi lại khách');
+
+        await api().put(`/api/task/edit/${created.body._id}`).set('Authorization', token).send({ status: 'todo' });
+        saved = await Task.findById(created.body._id);
+        expect(saved.status).toBe('todo');
+        expect(saved.completedDate).toBeUndefined();
+
+        expect((await api().put(`/api/task/edit/${created.body._id}`).set('Authorization', token).send({ status: 'later' })).status).toBe(400);
+        expect((await api().post('/api/task/add').set('Authorization', token).send({ title: 'x', status: 'later' })).status).toBe(400);
+    });
+
+    test('regular users only view their own tasks and bulk delete them', async () => {
+        const a = await createUserWithToken();
+        const b = await createUserWithToken();
+        const [t1, t2] = await Task.create([{ title: 'a1', createBy: a.user._id }, { title: 'a2', createBy: a.user._id }]);
+        expect((await api().get(`/api/task/view/${t1._id}`).set('Authorization', b.token)).status).toBe(404);
+        expect((await api().post('/api/task/deleteMany').set('Authorization', b.token).send([t1._id, t2._id])).status).toBe(200);
+        expect(await Task.countDocuments({ deleted: true })).toBe(0);
+        expect((await api().post('/api/task/deleteMany').set('Authorization', a.token).send([t1._id, t2._id])).status).toBe(200);
+        expect(await Task.countDocuments({ deleted: true })).toBe(2);
+        expect((await api().post('/api/task/deleteMany').set('Authorization', a.token).send({})).status).toBe(400);
     });
 });

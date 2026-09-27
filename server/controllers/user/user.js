@@ -3,11 +3,21 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { getJwtSecret } = require('../../middelwares/auth');
 const { isAdmin } = require('../../utils/access');
+const { withFullName } = require('../../utils/names');
+const { normalizePhone } = require('../../utils/phone');
+
+// Profile fields a user (or an admin) may set
+const profileFields = (body) => {
+    const { firstName, lastName, fullName, phoneNumber, position, brokerCertificate } = body;
+    const data = withFullName({ firstName, lastName, fullName, position, brokerCertificate });
+    if (phoneNumber !== undefined) data.phoneNumber = normalizePhone(phoneNumber);
+    return Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined));
+};
 
 const hasCredentials = (username, password) => typeof username === 'string' && username.trim() !== '' && typeof password === 'string' && password !== '';
 
 const createUser = async (req, res, role) => {
-    const { username, password, firstName, lastName, phoneNumber } = req.body;
+    const { username, password } = req.body;
     if (!hasCredentials(username, password)) {
         return res.status(400).json({ message: 'Username and password are required' });
     }
@@ -18,7 +28,7 @@ const createUser = async (req, res, role) => {
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
     // Create a new user
-    const newUser = new User({ username, password: hashedPassword, firstName, lastName, phoneNumber, role, createdDate: new Date() });
+    const newUser = new User({ ...profileFields(req.body), username, password: hashedPassword, role, createdDate: new Date() });
     // Save the user to the database
     await newUser.save();
     res.status(200).json({ message: `${role === 'admin' ? 'Admin' : 'User'} created successfully` });
@@ -51,6 +61,20 @@ const index = async (req, res) => {
     } catch (error) {
         res.status(500).json({ error });
     }
+}
+
+// Names of the active employees, for the pickers of every user (assigning a
+// customer, splitting a commission): no contact details nor statistics
+const options = async (req, res) => {
+    const users = await User.find({ deleted: false }).select('fullName firstName lastName username role').sort({ firstName: 1 });
+    res.status(200).json(users.map((user) => ({
+        _id: user._id,
+        fullName: user.fullName,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        role: user.role,
+    })));
 }
 
 const view = async (req, res) => {
@@ -92,7 +116,7 @@ const edit = async (req, res) => {
         return res.status(403).json({ message: 'Access denied.' })
     }
     try {
-        let { username, firstName, lastName, phoneNumber } = req.body
+        let { username } = req.body
 
         if (username && await User.exists({ username, _id: { $ne: req.params.id } })) {
             return res.status(400).json({ message: 'user already exist please try another email' });
@@ -101,7 +125,7 @@ const edit = async (req, res) => {
             { _id: req.params.id },
             {
                 $set: {
-                    username, firstName, lastName, phoneNumber, updatedDate: new Date()
+                    ...(username && { username }), ...profileFields(req.body), updatedDate: new Date()
                 }
             }
         );
@@ -169,4 +193,4 @@ const login = async (req, res) => {
     }
 }
 
-module.exports = { register, login, adminRegister, index, deleteMany, view, deleteData, edit, changePassword }
+module.exports = { register, login, adminRegister, index, options, deleteMany, view, deleteData, edit, changePassword }

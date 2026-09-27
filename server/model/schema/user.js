@@ -17,8 +17,13 @@ const user = new mongoose.Schema({
     outboundcall: { type: Number, default: 0 },
     // String keeps the leading 0 of local numbers (numbers saved by older versions are converted when read)
     phoneNumber: { type: String },
+    // Vietnamese full name ("Nguyễn Văn An"), firstName / lastName are derived from it
+    fullName: String,
     firstName: String,
     lastName: String,
+    position: String,
+    // Real estate brokers need a practising certificate (Luật Kinh doanh BĐS 2023)
+    brokerCertificate: String,
     updatedDate: {
         type: Date,
         default: Date.now

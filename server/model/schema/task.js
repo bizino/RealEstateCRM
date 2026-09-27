@@ -13,6 +13,11 @@ const Task = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Lead",
     },
+    // todo | inProgress | done
+    status: { type: String, default: 'todo' },
+    // high | normal | low
+    priority: String,
+    completedDate: Date,
     reminder: String,
     start: String,
     end: String,
