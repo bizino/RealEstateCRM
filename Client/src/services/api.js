@@ -1,6 +1,18 @@
 import axios from "axios"
 import { constant } from "constant"
 
+// A 401 means the stored session is not valid anymore (token signed with an old
+// JWT_SECRET, user deleted by an admin...): drop it and go back to the sign in page
+// instead of showing empty pages. Failed logins also answer 401, they are left alone.
+const handleUnauthorized = (error, path) => {
+    const hasSession = localStorage.getItem("token") || sessionStorage.getItem("token")
+    if (error?.response?.status === 401 && hasSession && !path.includes('api/user/login')) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        sessionStorage.removeItem('token')
+        window.location.assign('/auth/sign-in')
+    }
+}
 
 export const postApi = async (path, data, login) => {
     try {
@@ -21,6 +33,7 @@ export const postApi = async (path, data, login) => {
         return result
     } catch (e) {
         console.error(e)
+        handleUnauthorized(e, path)
         return e
     }
 }
@@ -34,6 +47,7 @@ export const putApi = async (path, data, id) => {
         return result
     } catch (e) {
         console.error(e)
+        handleUnauthorized(e, path)
         return e
     }
 }
@@ -51,6 +65,7 @@ export const deleteApi = async (path, id) => {
         return result
     } catch (e) {
         console.error(e)
+        handleUnauthorized(e, path)
         return e
     }
 }
@@ -68,6 +83,7 @@ export const deleteManyApi = async (path, data) => {
         return result
     } catch (e) {
         console.error(e)
+        handleUnauthorized(e, path)
         return e
     }
 }
@@ -92,6 +108,7 @@ export const getApi = async (path, id) => {
         }
     } catch (e) {
         console.error(e)
+        handleUnauthorized(e, path)
         return e
     }
 }
