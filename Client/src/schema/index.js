@@ -9,6 +9,7 @@ import { phoneCallSchema } from './phoneCallSchema.js';
 import { textMsgSchema } from './textMsgSchema.js';
 import { TaskSchema } from './taskSchema.js';
 import { MeetingSchema } from './meetingSchema.js';
+import { changePasswordSchema } from './changePasswordSchema.js';
 
 export {
     contactSchema,
@@ -22,4 +23,5 @@ export {
     phoneCallSchema,
     textMsgSchema,
     MeetingSchema,
+    changePasswordSchema,
 };

@@ -14,6 +14,7 @@ router.post('/deleteMany', auth, requireAdmin, user.deleteMany)
 router.get('/view/:id', auth, user.view)
 router.delete('/delete/:id', auth, requireAdmin, user.deleteData)
 router.put('/edit/:id', auth, user.edit)
+router.put('/change-password/:id', auth, user.changePassword)
 
 
 

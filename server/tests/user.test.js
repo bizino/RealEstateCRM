@@ -269,3 +269,59 @@ describe('DELETE /api/user/delete/:id and POST /api/user/deleteMany', () => {
         expect(res.status).toBe(404);
     });
 });
+
+describe('PUT /api/user/change-password/:id', () => {
+    const changePassword = (token, id, body) => api().put(`/api/user/change-password/${id}`).set('Authorization', token).send(body);
+
+    test('a user changes their own password with the current one', async () => {
+        const { token, user } = await createUserWithToken();
+        const res = await changePassword(token, user._id, { currentPassword: DEFAULT_PASSWORD, newPassword: 'new-secret-1' });
+        expect(res.status).toBe(200);
+        expect((await login(user.username, 'new-secret-1')).status).toBe(200);
+        expect((await login(user.username, DEFAULT_PASSWORD)).status).toBe(401);
+    });
+
+    test('a wrong current password is refused without logging the user out', async () => {
+        const { token, user } = await createUserWithToken();
+        const res = await changePassword(token, user._id, { currentPassword: 'wrong', newPassword: 'new-secret-1' });
+        // 400, not 401: the web client treats 401 as an expired session
+        expect(res.status).toBe(400);
+        expect(res.body.message).toMatch(/current password/i);
+        expect((await login(user.username, DEFAULT_PASSWORD)).status).toBe(200);
+    });
+
+    test('the new password needs at least 6 characters', async () => {
+        const { token, user } = await createUserWithToken();
+        const res = await changePassword(token, user._id, { currentPassword: DEFAULT_PASSWORD, newPassword: '123' });
+        expect(res.status).toBe(400);
+        expect((await login(user.username, DEFAULT_PASSWORD)).status).toBe(200);
+    });
+
+    test("a regular user cannot change another user's password", async () => {
+        const { token } = await createUserWithToken();
+        const other = await createUser();
+        const res = await changePassword(token, other._id, { currentPassword: DEFAULT_PASSWORD, newPassword: 'hacked-123' });
+        expect(res.status).toBe(403);
+        expect((await login(other.username, DEFAULT_PASSWORD)).status).toBe(200);
+    });
+
+    test("an admin resets another user's password without knowing it", async () => {
+        const { token } = await createUserWithToken({ role: 'admin' });
+        const other = await createUser();
+        const res = await changePassword(token, other._id, { newPassword: 'reset-by-admin' });
+        expect(res.status).toBe(200);
+        expect((await login(other.username, 'reset-by-admin')).status).toBe(200);
+    });
+
+    test('an admin changing their own password confirms the current one', async () => {
+        const { token, user } = await createUserWithToken({ role: 'admin' });
+        expect((await changePassword(token, user._id, { newPassword: 'no-current-1' })).status).toBe(400);
+        expect((await changePassword(token, user._id, { currentPassword: DEFAULT_PASSWORD, newPassword: 'admin-new-1' })).status).toBe(200);
+    });
+
+    test('returns 404 for an unknown user and 401 without token', async () => {
+        const { token } = await createUserWithToken({ role: 'admin' });
+        expect((await changePassword(token, objectId(), { newPassword: 'whatever-1' })).status).toBe(404);
+        expect((await api().put(`/api/user/change-password/${objectId()}`).send({ newPassword: 'whatever-1' })).status).toBe(401);
+    });
+});

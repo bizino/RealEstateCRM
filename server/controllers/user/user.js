@@ -95,7 +95,7 @@ const edit = async (req, res) => {
         let { username, firstName, lastName, phoneNumber } = req.body
 
         if (username && await User.exists({ username, _id: { $ne: req.params.id } })) {
-            return res.status(400).json({ error: 'user already exist please try another email' });
+            return res.status(400).json({ message: 'user already exist please try another email' });
         }
         let result = await User.updateOne(
             { _id: req.params.id },
@@ -116,6 +116,31 @@ const edit = async (req, res) => {
     }
 }
 
+
+// Users change their own password by confirming the current one, admins may
+// also reset the password of another user
+const changePassword = async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    const isSelf = req.params.id === req.user.userId;
+    if (!isSelf && !isAdmin(req)) {
+        return res.status(403).json({ message: 'Access denied.' })
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < 6) {
+        return res.status(400).json({ message: 'The new password must have at least 6 characters' })
+    }
+    const user = await User.findOne({ _id: req.params.id, deleted: false })
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' })
+    }
+    // 400 and not 401: the web client treats 401 as an expired session
+    if (isSelf && !(typeof currentPassword === 'string' && await bcrypt.compare(currentPassword, user.password))) {
+        return res.status(400).json({ message: 'Current password is incorrect' })
+    }
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.updatedDate = new Date();
+    await user.save();
+    res.status(200).json({ message: 'Password changed successfully' })
+}
 
 const login = async (req, res) => {
     try {
@@ -144,4 +169,4 @@ const login = async (req, res) => {
     }
 }
 
-module.exports = { register, login, adminRegister, index, deleteMany, view, deleteData, edit }
+module.exports = { register, login, adminRegister, index, deleteMany, view, deleteData, edit, changePassword }

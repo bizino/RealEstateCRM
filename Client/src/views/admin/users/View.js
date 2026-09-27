@@ -1,4 +1,4 @@
-import { AddIcon, ChevronDownIcon, DeleteIcon, EditIcon } from "@chakra-ui/icons";
+import { AddIcon, ChevronDownIcon, DeleteIcon, EditIcon, LockIcon } from "@chakra-ui/icons";
 import { Box, Button, Flex, Grid, GridItem, Heading, Menu, MenuButton, MenuDivider, MenuItem, MenuList, Text, useDisclosure } from "@chakra-ui/react";
 import Card from "components/card/Card";
 import { HSeparator } from "components/separator/Separator";
@@ -8,6 +8,7 @@ import { IoIosArrowBack } from "react-icons/io";
 import { Link, useParams } from "react-router-dom";
 import { getApi } from "services/api";
 import Add from "./Add";
+import ChangePassword from "./ChangePassword";
 import Delete from "./Delete";
 import Edit from "./Edit";
 
@@ -19,10 +20,14 @@ const View = () => {
     const { isOpen, onOpen, onClose } = useDisclosure()
     const [edit, setEdit] = useState(false);
     const [deleteModel, setDelete] = useState(false);
+    const [changePassword, setChangePassword] = useState(false);
     const [isLoding, setIsLoding] = useState(false)
     const [action, setAction] = useState(false)
 
     const size = "lg";
+    const loginUser = JSON.parse(localStorage.getItem('user'))
+    // Everyone changes their own password, admins may reset the password of other users
+    const canChangePassword = loginUser?._id === param.id || loginUser?.role === 'admin'
 
     const fetchData = async () => {
         setIsLoding(true)
@@ -44,6 +49,7 @@ const View = () => {
                     <Add isOpen={isOpen} size={size} onClose={onClose} />
                     <Edit isOpen={edit} size={size} onClose={setEdit} setAction={setAction} />
                     <Delete isOpen={deleteModel} onClose={setDelete} method='one' url='api/user/delete/' id={param.id} />
+                    <ChangePassword isOpen={changePassword} onClose={setChangePassword} id={param.id} />
 
                     <Grid templateColumns="repeat(6, 1fr)" mb={3} gap={1}>
                         <GridItem colStart={6} >
@@ -56,6 +62,7 @@ const View = () => {
                                     <MenuList>
                                         <MenuItem onClick={() => onOpen()} icon={<AddIcon />}>Add</MenuItem>
                                         <MenuItem onClick={() => setEdit(true)} icon={<EditIcon />}>Edit</MenuItem>
+                                        {canChangePassword && <MenuItem onClick={() => setChangePassword(true)} icon={<LockIcon />}>Change Password</MenuItem>}
                                         {data?.role !== 'admin' && JSON.parse(localStorage.getItem('user'))?.role === 'admin' && <>
                                             <MenuDivider />
                                             <MenuItem onClick={() => setDelete(true)} icon={<DeleteIcon />}>Delete</MenuItem>
@@ -118,6 +125,7 @@ const View = () => {
                             <GridItem colStart={6} >
                                 <Flex justifyContent={"right"}>
                                     <Button onClick={() => setEdit(true)} leftIcon={<EditIcon />} mr={2.5} variant="outline" colorScheme="green">Edit</Button>
+                                    {canChangePassword && <Button onClick={() => setChangePassword(true)} leftIcon={<LockIcon />} mr={2.5} variant="outline">Change Password</Button>}
                                     {data?.role !== 'admin' && JSON.parse(localStorage.getItem('user'))?.role === 'admin' && <Button style={{ background: 'red.800' }} onClick={() => setDelete(true)} leftIcon={<DeleteIcon />} colorScheme="red" >Delete</Button>}
                                 </Flex>
                             </GridItem>

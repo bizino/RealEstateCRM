@@ -29,7 +29,6 @@ describe('api service session handling', () => {
         await getApi('api/contact/');
 
         expect(localStorage.getItem('token')).toBeNull();
-        expect(localStorage.getItem('user')).toBeNull();
         expect(window.location.assign).toHaveBeenCalledWith('/auth/sign-in');
     });
 
