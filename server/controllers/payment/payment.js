@@ -1,5 +1,8 @@
 const stripeModule = require('stripe')
 
+// Page Stripe sends the customer back to after the checkout
+const paymentsPageUrl = () => `${(process.env.CLIENT_URL || 'https://real-estate-crm-jet.vercel.app').replace(/\/+$/, '')}/payments`;
+
 
 const index = async (req, res) => {
     const stripe = stripeModule(process.env.STRIPE_PRIVATE_KEY);
@@ -68,8 +71,8 @@ const add = async (req, res) => {
                     quantity: item.quantity,
                 };
             }),
-            success_url: "https://real-estate-crm-jet.vercel.app/payments",
-            cancel_url: "https://real-estate-crm-jet.vercel.app/payments",
+            success_url: paymentsPageUrl(),
+            cancel_url: paymentsPageUrl(),
         });
         res.json({ url: session.url });
     } catch (e) {

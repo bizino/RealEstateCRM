@@ -31,6 +31,25 @@ describe('POST /api/payment/add', () => {
         expect(params.line_items[0].quantity).toBe(1);
     });
 
+    test('sends the customer back to CLIENT_URL', async () => {
+        stripe.checkout.sessions.create.mockResolvedValue({ url: 'https://checkout.stripe.test/session' });
+        process.env.CLIENT_URL = 'https://crm.example.vn/';
+        try {
+            await api().post('/api/payment/add').send({ items: [{ quantity: 1, price: 10, name: 'x' }] });
+        } finally {
+            delete process.env.CLIENT_URL;
+        }
+        const params = stripe.checkout.sessions.create.mock.calls[0][0];
+        expect(params.success_url).toBe('https://crm.example.vn/payments');
+        expect(params.cancel_url).toBe('https://crm.example.vn/payments');
+    });
+
+    test('falls back to the demo site when CLIENT_URL is not set', async () => {
+        stripe.checkout.sessions.create.mockResolvedValue({ url: 'https://checkout.stripe.test/session' });
+        await api().post('/api/payment/add').send({ items: [{ quantity: 1, price: 10, name: 'x' }] });
+        expect(stripe.checkout.sessions.create.mock.calls[0][0].success_url).toBe('https://real-estate-crm-jet.vercel.app/payments');
+    });
+
     test('rejects a request without items or with an invalid price', async () => {
         expect((await api().post('/api/payment/add').send({ customer_email: 'a@b.c' })).status).toBe(400);
         expect((await api().post('/api/payment/add').send({ items: [{ quantity: 1, price: 'abc' }] })).status).toBe(400);

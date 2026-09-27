@@ -34,7 +34,11 @@ Getting started with RealEstateCRM is a breeze. Follow our comprehensive install
 
 ### Configuration
 
-The API reads its settings from `server/.env`, see [`server/.env.example`](server/.env.example). Always set `JWT_SECRET` to a long random value in production: without it the server falls back to the insecure default key (and logs a warning). Changing it logs every user out once.
+The API reads its settings from `server/.env`, see [`server/.env.example`](server/.env.example). For a production installation:
+
+- `JWT_SECRET`: a long random value. Without it the server falls back to the insecure default key (and logs a warning). Changing it logs every user out once.
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD`: the first admin account, created when the database has no admin yet. Without them the demo account (`admin@gmail.com` / `admin123`) is created.
+- `CLIENT_URL`: address of the web client, Stripe sends customers back to its `/payments` page after a checkout.
 
 ### Running the tests
 

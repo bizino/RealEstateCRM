@@ -16,8 +16,13 @@ const connectDB = async (DATABASE_URL, DATABASE) => {
             const phoneNumber = 7874263694
             const firstName = 'Prolink'
             const lastName = 'Infotech'
-            const username = 'admin@gmail.com'
-            const password = 'admin123'
+            // Set ADMIN_EMAIL / ADMIN_PASSWORD before the first start of a new
+            // installation, the demo credentials are only a fallback
+            const username = process.env.ADMIN_EMAIL || 'admin@gmail.com'
+            const password = process.env.ADMIN_PASSWORD || 'admin123'
+            if (!process.env.ADMIN_PASSWORD) {
+                console.warn(`WARNING: admin ${username} was created with the default demo password, set ADMIN_PASSWORD for production installations.`);
+            }
             // Hash the password
             const hashedPassword = await bcrypt.hash(password, 10);
             // Create a new user
