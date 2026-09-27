@@ -4,7 +4,8 @@ export const leadSchema = yup.object({
     // Lead Information:
     leadName: yup.string().required("Lead Name Is required"),
     leadEmail: yup.string().email().required("Lead Email Is required"),
-    leadPhoneNumber: yup.string().min(1000000000, 'Phone number is invalid').max(999999999999, 'Phone number is invalid').required("Lead Phone Number Is required"),
+    // 10 to 12 digits (a leading 0 is allowed); string().min/max would check the text length
+    leadPhoneNumber: yup.string().matches(/^\d{10,12}$/, { message: 'Phone number is invalid', excludeEmptyString: true }).required("Lead Phone Number Is required"),
     leadAddress: yup.string().required("Lead Address Is required"),
     // Lead Source and Details:
     leadSource: yup.string(),

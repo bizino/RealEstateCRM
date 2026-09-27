@@ -40,8 +40,8 @@ const AddEmailHistory = (props) => {
             let response = await postApi('api/email/add', values)
             if (response.status === 200) {
                 props.onClose();
-                fetchData()
-                setAction((pre) => !pre)
+                fetchData?.()
+                setAction?.((pre) => !pre)
             }
         } catch (e) {
             console.log(e);

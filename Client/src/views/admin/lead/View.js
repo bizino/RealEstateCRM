@@ -46,6 +46,8 @@ const View = () => {
     const [edit, setEdit] = useState(false);
     const [deleteModel, setDelete] = useState(false);
     const [isLoding, setIsLoding] = useState(false)
+    // Keep the selected tab while the data is reloaded (after adding an activity or a file)
+    const [tabIndex, setTabIndex] = useState(0)
     const [taskModel, setTaskModel] = useState(false);
     const [addMeeting, setMeeting] = useState(false);
 
@@ -145,7 +147,7 @@ const View = () => {
                         </GridItem>
                     </Grid> */}
 
-                    <Tabs >
+                    <Tabs index={tabIndex} onChange={setTabIndex}>
                         <Grid templateColumns="repeat(3, 1fr)" mb={3} gap={1}>
                             <GridItem colSpan={2}>
                                 <TabList sx={{

@@ -62,12 +62,12 @@ describe('POST /api/reporting/index', () => {
         expect(res.body.outboundcall[0].totalCall).toBe(1);
     });
 
-    test('responds 400 with zero totals when there is no data', async () => {
+    test('responds 200 with empty series when there is no data', async () => {
         const { token } = await seed();
         const res = await api().post('/api/reporting/index').set('Authorization', token)
             .send({ startDate: '2025-01-01', endDate: '2025-01-31', filter: 'month' });
-        expect(res.status).toBe(400);
-        expect(res.body).toEqual({ totalEmails: 0, totalCall: 0, totalTextSent: 0 });
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ EmailDetails: [], outboundcall: [] });
     });
 
     test('validates dates', async () => {
@@ -82,7 +82,7 @@ describe('POST /api/reporting/index', () => {
         const other = await createUserWithToken();
         const res = await api().post('/api/reporting/index').set('Authorization', other.token)
             .send({ startDate: '2026-09-01', endDate: '2026-09-30', filter: 'day' });
-        expect(res.status).toBe(400);
-        expect(res.body.totalEmails).toBe(0);
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ EmailDetails: [], outboundcall: [] });
     });
 });

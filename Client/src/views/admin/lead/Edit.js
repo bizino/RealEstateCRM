@@ -9,6 +9,9 @@ import { leadSchema } from 'schema';
 import { putApi } from 'services/api';
 import { getApi } from 'services/api';
 
+// <input type="date"> expects YYYY-MM-DD, the API returns ISO date strings
+const toDateInput = (date) => (date ? date.slice(0, 10) : '');
+
 const Edit = (props) => {
     const [isLoding, setIsLoding] = useState(false)
 
@@ -79,36 +82,38 @@ const Edit = (props) => {
     let response
     const fetchData = async () => {
         response = await getApi('api/lead/view/', param.id)
+        // The view endpoint returns { lead, Email, phoneCall, ... }
+        const lead = response?.data?.lead;
         // Lead Information`
-        values.leadName = response?.data?.leadName;
-        values.leadEmail = response?.data?.leadEmail;
-        values.leadPhoneNumber = response?.data?.leadPhoneNumber;
-        values.leadAddress = response?.data?.leadAddress;
+        values.leadName = lead?.leadName;
+        values.leadEmail = lead?.leadEmail;
+        values.leadPhoneNumber = lead?.leadPhoneNumber;
+        values.leadAddress = lead?.leadAddress;
         // Lead Source and Details
-        values.leadSource = response?.data?.leadSource;
-        values.leadStatus = response?.data?.leadStatus;
-        values.leadSourceDetails = response?.data?.leadSourceDetails;
-        values.leadCampaign = response?.data?.leadCampaign;
-        values.leadSourceChannel = response?.data?.leadSourceChannel;
-        values.leadSourceMedium = response?.data?.leadSourceMedium;
-        values.leadSourceCampaign = response?.data?.leadSourceCampaign;
-        values.leadSourceReferral = response?.data?.leadSourceReferral;
+        values.leadSource = lead?.leadSource;
+        values.leadStatus = lead?.leadStatus;
+        values.leadSourceDetails = lead?.leadSourceDetails;
+        values.leadCampaign = lead?.leadCampaign;
+        values.leadSourceChannel = lead?.leadSourceChannel;
+        values.leadSourceMedium = lead?.leadSourceMedium;
+        values.leadSourceCampaign = lead?.leadSourceCampaign;
+        values.leadSourceReferral = lead?.leadSourceReferral;
         // Lead Assignment and Ownership
-        values.leadAssignedAgent = response?.data?.leadAssignedAgent;
-        values.leadOwner = response?.data?.leadOwner;
-        values.leadCommunicationPreferences = response?.data?.leadCommunicationPreferences;
+        values.leadAssignedAgent = lead?.leadAssignedAgent;
+        values.leadOwner = lead?.leadOwner;
+        values.leadCommunicationPreferences = lead?.leadCommunicationPreferences;
         // Lead Dates and Follow-up
-        values.leadCreationDate = response?.data?.leadCreationDate;
-        values.leadConversionDate = response?.data?.leadConversionDate;
-        values.leadFollowUpDate = response?.data?.leadFollowUpDate;
-        values.leadFollowUpStatus = response?.data?.leadFollowUpStatus;
+        values.leadCreationDate = toDateInput(lead?.leadCreationDate);
+        values.leadConversionDate = toDateInput(lead?.leadConversionDate);
+        values.leadFollowUpDate = toDateInput(lead?.leadFollowUpDate);
+        values.leadFollowUpStatus = lead?.leadFollowUpStatus;
         // Lead Scoring and Nurturing
-        values.leadScore = response?.data?.leadScore;
-        values.leadNurturingWorkflow = response?.data?.leadNurturingWorkflow;
-        values.leadEngagementLevel = response?.data?.leadEngagementLevel;
-        values.leadConversionRate = response?.data?.leadConversionRate;
-        values.leadNurturingStage = response?.data?.leadNurturingStage;
-        values.leadNextAction = response?.data?.leadNextAction;
+        values.leadScore = lead?.leadScore;
+        values.leadNurturingWorkflow = lead?.leadNurturingWorkflow;
+        values.leadEngagementLevel = lead?.leadEngagementLevel;
+        values.leadConversionRate = lead?.leadConversionRate;
+        values.leadNurturingStage = lead?.leadNurturingStage;
+        values.leadNextAction = lead?.leadNextAction;
     }
 
     useEffect(() => {

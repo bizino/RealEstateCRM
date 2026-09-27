@@ -27,7 +27,7 @@
     "jwt-decode": "^3.1.2",
     "moment": "^2.29.4",
     "react": "17.0.2",
-    "react-apexcharts": "~1.4.1",
+    "react-apexcharts": "1.4.1",
     "react-calendar": "^3.7.0",
     "react-custom-scrollbars-2": "^4.2.1",
     "react-datepicker": "^4.16.0",

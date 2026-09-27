@@ -42,6 +42,8 @@ const View = () => {
     const [deleteModel, setDelete] = useState(false);
     const [propertyModel, setPropertyModel] = useState(false);
     const [isLoding, setIsLoding] = useState(false)
+    // Keep the selected tab while the data is reloaded (after adding an activity or a file)
+    const [tabIndex, setTabIndex] = useState(0)
     const [action, setAction] = useState(false)
 
     const [taskModel, setTaskModel] = useState(false);
@@ -149,7 +151,7 @@ const View = () => {
                         </GridItem>
                     </Grid>
 
-                    <Tabs >
+                    <Tabs index={tabIndex} onChange={setTabIndex}>
                         <TabList
                             sx={{ '& button:focus': { boxShadow: 'none', }, }}
                         >

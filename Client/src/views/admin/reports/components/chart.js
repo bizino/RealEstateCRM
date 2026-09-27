@@ -1,22 +1,14 @@
-import { Box, Grid, Radio, RadioGroup, Select, Stack } from '@chakra-ui/react';
+import { Grid, Text } from '@chakra-ui/react';
 import Card from "components/card/Card";
-import moment from 'moment';
-import { useEffect, useState } from 'react';
 import ReactApexChart from "react-apexcharts";
-import ReactDatePicker from "react-datepicker";
-import 'react-datepicker/dist/react-datepicker.css';
-import { postApi } from "services/api";
 
 
 const ReportChart = (props) => {
-    const { dashboard } = props;
-    const [Chartseries, setChartSeries] = useState([44, 55, 13, 33]);
+    const { labels = [], series = [] } = props;
+    const hasData = series.some((value) => value > 0);
 
     const options = {
-        chart: {
-            width: 380,
-            type: "donut",
-        },
+        labels,
         dataLabels: {
             enabled: false,
         },
@@ -24,9 +16,6 @@ const ReportChart = (props) => {
             {
                 breakpoint: 480,
                 options: {
-                    chart: {
-                        width: 200,
-                    },
                     legend: {
                         show: false,
                     },
@@ -40,14 +29,15 @@ const ReportChart = (props) => {
     return (
         <Card>
             <Grid py={5}>
-                <div >
+                {hasData ?
                     <ReactApexChart
                         options={options}
-                        series={Chartseries}
+                        series={series}
                         type="donut"
-                        width={450}
+                        width="100%"
                     />
-                </div>
+                    : <Text textAlign="center" color="gray.500">No data yet</Text>
+                }
             </Grid>
         </Card >
     )

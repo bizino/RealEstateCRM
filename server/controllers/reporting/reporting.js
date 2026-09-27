@@ -271,12 +271,9 @@ const data = async (req, res) => {
             { $project: { _id: 0, startDate: 1, endDate: 1, totalTextSent: 1, TextMsges: 1, }, },
         ]);
 
-        if (EmailDetails.length <= 0 && outboundcall.length <= 0 && TextSent.length <= 0) {
-            res.status(400).json({ totalEmails: 0, totalCall: 0, totalTextSent: 0 });
-        } else {
-            res.status(200).json({ EmailDetails, outboundcall });
-            // res.status(200).json({ EmailDetails, outboundcall, TextSent });
-        }
+        // An empty period is not an error: the charts render empty series
+        res.status(200).json({ EmailDetails, outboundcall });
+        // res.status(200).json({ EmailDetails, outboundcall, TextSent });
 
     } catch (err) {
         console.error('Failed :', err);

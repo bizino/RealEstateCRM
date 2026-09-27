@@ -160,7 +160,10 @@ export default function UserReports() {
               />
             </Flex>
             <HSeparator />
-            <Chart dashboard={"dashboard"} />
+            <Chart
+              labels={["Tasks", "Contacts", "Leads", "Properties"]}
+              series={[task?.length || 0, contactData?.length || 0, leadData?.length || 0, propertyData?.length || 0]}
+            />
           </Card>
         </GridItem>
       </Grid>

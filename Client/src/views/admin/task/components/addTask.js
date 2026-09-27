@@ -55,7 +55,7 @@ const AddTask = (props) => {
             if (response.status === 200) {
                 formik.resetForm()
                 onClose();
-                fetchData()
+                fetchData?.()
             }
         } catch (e) {
             console.log(e);

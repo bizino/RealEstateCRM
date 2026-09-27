@@ -31,10 +31,10 @@ const ReportChart = (props) => {
         }
     }
 
+    // No chart.id here: apexcharts >= 3.49.1 registers charts that have an id in a
+    // global list which the dashboard donut chart (responsive options) then tries to
+    // deep clone, crashing with "Maximum call stack size exceeded".
     const options = {
-        chart: {
-            id: 'line-chart',
-        },
         xaxis: {
             type: 'datetime',
         },

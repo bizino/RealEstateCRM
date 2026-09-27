@@ -32,6 +32,8 @@ const View = () => {
     const [floorPlans, setFloorPlans] = useState(false);
     const [propertyDocuments, setPropertyDocuments] = useState(false);
     const [isLoding, setIsLoding] = useState(false)
+    // Keep the selected tab while the data is reloaded (after adding an activity or a file)
+    const [tabIndex, setTabIndex] = useState(0)
 
     const size = "lg";
 
@@ -95,7 +97,7 @@ const View = () => {
                         </GridItem>
                     </Grid>
 
-                    <Tabs >
+                    <Tabs index={tabIndex} onChange={setTabIndex}>
                         <TabList sx={{ '& button:focus': { boxShadow: 'none', }, }} >
                             <Tab>Information</Tab>
                             <Tab>gallery</Tab>

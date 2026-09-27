@@ -22,8 +22,9 @@ const AddMeeting = (props) => {
 
     const initialValues = {
         agenda: '',
-        attendes: [],
-        attendesLead: [],
+        // Opened from a contact or lead page: that record attends by default
+        attendes: from === 'contact' && props.id ? [props.id] : [],
+        attendesLead: from === 'lead' && props.id ? [props.id] : [],
         location: '',
         related: from ? from : '',
         dateTime: '',
@@ -50,7 +51,9 @@ const AddMeeting = (props) => {
                 if (response.status === 200) {
                     formik.resetForm();
                     props.onClose();
-                    setAction((pre) => !pre)
+                    // list pages pass setAction, the contact and lead views pass fetchData
+                    setAction?.((pre) => !pre)
+                    props.fetchData?.()
                 }
             } else {
                 toast.error('Select Related To')
