@@ -7,8 +7,10 @@ const Contact = new mongoose.Schema({
     lastName: String,
     title: String,
     email: String,
-    phoneNumber: Number,
-    mobileNumber: Number,
+    // Strings keep the leading 0 of local numbers (0901234567); values saved as
+    // numbers by older versions are converted when read
+    phoneNumber: String,
+    mobileNumber: String,
     physicalAddress: String,
     mailingAddress: String,
     preferredContactMethod: String,

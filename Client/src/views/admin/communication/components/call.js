@@ -70,7 +70,7 @@ const Call = () => {
 
     useEffect(() => {
         data?.map((item) => {
-            let recipientExists = item?.phoneNumber === values.recipient
+            let recipientExists = String(item?.phoneNumber) === String(values.recipient)
             if (recipientExists) {
                 values.createBy = item._id
                 setFieldValue('createBy', item._id)
@@ -104,7 +104,7 @@ const Call = () => {
                 {isOpen && values?.recipient && (
                     <List position={'relative'} border={'1px solid'} bg={'gray.100'} width={'100%'} borderRadius={'0px 0px 20px 20px'} lineHeight={1} >
                         {data?.filter((option) => {
-                            if (option && option.phoneNumber && typeof option.phoneNumber === 'number') {
+                            if (option && option.phoneNumber) {
                                 return option.phoneNumber.toString().includes(values.recipient.toString().toLowerCase());
                             }
                             return false;

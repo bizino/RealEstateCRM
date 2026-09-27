@@ -66,7 +66,7 @@ const TextMsg = () => {
 
     useEffect(() => {
         data?.map((item) => {
-            let recipientExists = item?.phoneNumber === values.to
+            let recipientExists = String(item?.phoneNumber) === String(values.to)
             if (recipientExists) {
                 values.createFor = item._id
                 setFieldValue('createFor', item._id)
@@ -100,7 +100,7 @@ const TextMsg = () => {
                 {isOpen && values?.to && (
                     <List position={'relative'} border={'1px solid'} bg={'gray.100'} width={'100%'} borderRadius={'0px 0px 20px 20px'} lineHeight={1} >
                         {data?.filter((option) => {
-                            if (option && option.phoneNumber && typeof option.phoneNumber === 'number') {
+                            if (option && option.phoneNumber) {
                                 return option.phoneNumber.toString().includes(values.to.toString().toLowerCase());
                             }
                             return false;

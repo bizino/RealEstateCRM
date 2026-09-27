@@ -6,8 +6,9 @@ export const contactSchema = yup.object({
     lastName: yup.string().min(2).required('Last Name is required'),
     title: yup.string().required('Title is required'),
     email: yup.string().email().required('Email is required'),
-    phoneNumber: yup.number().min(1000000000, 'Phone number is invalid').max(999999999999, 'Phone number is invalid').required('Phonenumber is Required'),
-    mobileNumber: yup.number().min(1000000000, 'Phone number is invalid').max(999999999999, 'Phone number is invalid').notRequired(),
+    // 10 to 12 digits; kept as text so that the leading 0 of local numbers (0901234567) is not lost
+    phoneNumber: yup.string().matches(/^\d{10,12}$/, { message: 'Phone number is invalid', excludeEmptyString: true }).required('Phonenumber is Required'),
+    mobileNumber: yup.string().matches(/^\d{10,12}$/, { message: 'Phone number is invalid', excludeEmptyString: true }).notRequired(),
     physicalAddress: yup.string().required('Physical address is required'),
     mailingAddress: yup.string(),
     preferredContactMethod: yup.string().required('Preferred contact method is required'),

@@ -15,7 +15,8 @@ const user = new mongoose.Schema({
     emailsent: { type: Number, default: 0 },
     textsent: { type: Number, default: 0 },
     outboundcall: { type: Number, default: 0 },
-    phoneNumber: { type: Number },
+    // String keeps the leading 0 of local numbers (numbers saved by older versions are converted when read)
+    phoneNumber: { type: String },
     firstName: String,
     lastName: String,
     updatedDate: {

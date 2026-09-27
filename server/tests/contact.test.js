@@ -48,8 +48,25 @@ describe('POST /api/contact/add', () => {
 
     test('returns 400 for invalid data', async () => {
         const { token, user } = await createUserWithToken();
-        const res = await api().post('/api/contact/add').set('Authorization', token).send(contactPayload(user._id, { phoneNumber: 'not-a-number' }));
+        const res = await api().post('/api/contact/add').set('Authorization', token).send(contactPayload(user._id, { leadRating: 'not-a-number' }));
         expect(res.status).toBe(400);
+    });
+
+    test('keeps the leading 0 of Vietnamese phone numbers', async () => {
+        const { token, user } = await createUserWithToken();
+        const res = await api().post('/api/contact/add').set('Authorization', token)
+            .send(contactPayload(user._id, { phoneNumber: '0901234567', mobileNumber: '0987654321' }));
+        expect(res.status).toBe(200);
+        const view = await api().get(`/api/contact/view/${res.body._id}`).set('Authorization', token);
+        expect(view.body.contact.phoneNumber).toBe('0901234567');
+        expect(view.body.contact.mobileNumber).toBe('0987654321');
+    });
+
+    test('still reads phone numbers saved as numbers by older versions', async () => {
+        const { token, user } = await createUserWithToken();
+        const { insertedId } = await Contact.collection.insertOne({ firstName: 'Old', phoneNumber: 9876543210, createBy: user._id, deleted: false });
+        const list = await api().get('/api/contact').set('Authorization', token);
+        expect(list.body.find((c) => c._id === insertedId.toString()).phoneNumber).toBe('9876543210');
     });
 });
 

@@ -74,6 +74,13 @@ describe('POST /api/user/register', () => {
         expect(await bcrypt.compare(payload.password, saved.password)).toBe(true);
     });
 
+    test('keeps the leading 0 of the phone number', async () => {
+        const { token } = await createUserWithToken({ role: 'admin' });
+        const payload = newUserPayload({ phoneNumber: '0987654321' });
+        await api().post('/api/user/register').set('Authorization', token).send(payload);
+        expect((await User.findOne({ username: payload.username })).phoneNumber).toBe('0987654321');
+    });
+
     test('rejects a duplicate username', async () => {
         const { token, user } = await createUserWithToken({ role: 'admin' });
         const res = await api().post('/api/user/register').set('Authorization', token).send(newUserPayload({ username: user.username }));
@@ -178,11 +185,12 @@ describe('PUT /api/user/edit/:id', () => {
     test('a user can update their own profile', async () => {
         const { token, user } = await createUserWithToken();
         const res = await api().put(`/api/user/edit/${user._id}`).set('Authorization', token)
-            .send({ username: user.username, firstName: 'Changed', lastName: 'Name', phoneNumber: 1234567890 });
+            .send({ username: user.username, firstName: 'Changed', lastName: 'Name', phoneNumber: '0912345678' });
         expect(res.status).toBe(200);
         const saved = await User.findById(user._id);
         expect(saved.firstName).toBe('Changed');
-        expect(saved.phoneNumber).toBe(1234567890);
+        // the leading 0 of Vietnamese numbers must be kept
+        expect(saved.phoneNumber).toBe('0912345678');
         expect(saved.updatedDate.getTime()).toBeGreaterThan(user.updatedDate.getTime());
     });
 
