@@ -3,9 +3,11 @@ const User = require('../../model/schema/user')
 const PhoneCall = require('../../model/schema/phoneCall');
 const TextMsg = require('../../model/schema/textMsg');
 const mongoose = require('mongoose');
+const { isAdmin, scopedQuery } = require('../../utils/access');
 
 const index = async (req, res) => {
-    const query = req.query
+    // Regular users only get their own statistics
+    const query = scopedQuery(req, '_id')
     query.deleted = false;
     let result = await User.find(query)
     res.send(result)
@@ -34,10 +36,11 @@ const data = async (req, res) => {
             timestamp: { $gte: startDate, $lte: endDate }, // Filter documents with timestamp between startDate and endDate
         };
         // matchFilter.deleted = false;
-        const query = req.query;
+        // Regular users only get their own activity, admins may filter by sender
+        const sender = isAdmin(req) ? req.query.sender : req.user.userId;
         // Convert sender to ObjectId if provided
-        if (query.sender) {
-            matchFilter.sender = new mongoose.Types.ObjectId(query.sender);
+        if (sender) {
+            matchFilter.sender = new mongoose.Types.ObjectId(sender);
         }
 
         let groupFields = {
@@ -268,12 +271,9 @@ const data = async (req, res) => {
             { $project: { _id: 0, startDate: 1, endDate: 1, totalTextSent: 1, TextMsges: 1, }, },
         ]);
 
-        if (EmailDetails.length <= 0 && outboundcall.length <= 0 && TextSent.length <= 0) {
-            res.status(400).json({ totalEmails: 0, totalCall: 0, totalTextSent: 0 });
-        } else {
-            res.status(200).json({ EmailDetails, outboundcall });
-            // res.status(200).json({ EmailDetails, outboundcall, TextSent });
-        }
+        // An empty period is not an error: the charts render empty series
+        res.status(200).json({ EmailDetails, outboundcall });
+        // res.status(200).json({ EmailDetails, outboundcall, TextSent });
 
     } catch (err) {
         console.error('Failed :', err);

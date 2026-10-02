@@ -1,6 +1,7 @@
 const express = require('express');
 const auth = require('../../middelwares/auth');
-const phoneCall = require('./phonCall')
+const { wrapController } = require('../../middelwares/errorHandler');
+const phoneCall = wrapController(require('./phonCall'))
 
 const router = express.Router();
 

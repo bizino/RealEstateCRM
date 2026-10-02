@@ -3,12 +3,18 @@ const mongoose = require('mongoose');
 
 const Contact = new mongoose.Schema({
     // 1. Basic Information
+    // Vietnamese full name ("Nguyễn Văn An"), firstName ("An") and lastName
+    // ("Nguyễn Văn") are derived from it for sorting and older screens
+    fullName: String,
     firstName: String,
     lastName: String,
     title: String,
     email: String,
-    phoneNumber: Number,
-    mobileNumber: Number,
+    // Strings keep the leading 0 of local numbers (0901234567); values saved as
+    // numbers by older versions are converted when read
+    phoneNumber: String,
+    mobileNumber: String,
+    zalo: String,
     physicalAddress: String,
     mailingAddress: String,
     preferredContactMethod: String,
@@ -20,7 +26,13 @@ const Contact = new mongoose.Schema({
     leadStatus: String,
     leadRating: Number,
     leadConversionProbability: String,
-    // 4. Property of Interest
+    // 4. Needs: buyer | renter | investor | seller | landlord | other
+    customerType: String,
+    budgetFrom: Number,
+    budgetTo: Number,
+    interestedArea: String,
+    interestedPropertyType: String,
+    // Property of Interest
     interestProperty: [{
         type: mongoose.Schema.ObjectId,
         ref: 'property',
@@ -46,6 +58,12 @@ const Contact = new mongoose.Schema({
     facebookProfile: String,
     twitterHandle: String,
     otherProfiles: String,
+    // Citizen id (CCCD), only needed for deposit / sale contracts
+    idNumber: String,
+    // Consent of the customer to the processing of their personal data
+    // (Luật Bảo vệ dữ liệu cá nhân 2025)
+    dataConsent: Boolean,
+    dataConsentDate: Date,
     // 11. Lead Assignment and Team Collaboration:
     agentOrTeamMember: String,
     internalNotesOrComments: String,

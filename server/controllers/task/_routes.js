@@ -1,5 +1,6 @@
 const express = require('express');
-const task = require('./task');
+const { wrapController } = require('../../middelwares/errorHandler');
+const task = wrapController(require('./task'));
 const auth = require('../../middelwares/auth');
 
 const router = express.Router();
@@ -9,6 +10,7 @@ router.post('/add', auth, task.add)
 router.get('/view/:id', auth, task.view)
 router.put('/edit/:id', auth, task.edit)
 router.delete('/delete/:id', auth, task.deleteData)
+router.post('/deleteMany', auth, task.deleteMany)
 
 
 module.exports = router

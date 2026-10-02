@@ -1,19 +1,33 @@
-import * as yup from 'yup'
+import { isValidPhone } from 'utils/format';
+import * as yup from 'yup';
 
-export const phoneCallSchema = yup.object({
-    sender: yup.string().required("Sender Is required"),
-    // recipient: yup.number().min(99999999, 'Phone number is invalid length').max(999999999999, 'Phone number is invalid').required("Recipient Is required"),
-    recipient: yup.number().required("Recipient Is required"),
-    callDuration: yup.string(),
-    callNotes: yup.string(),
-    createBy: yup.string(),
-    createByLead: yup.string(),
-    category: yup.string()
-}).test('createBy-or-createByLead-required', 'Recipient Is required', function (value) {
-    if (!value.createBy && !value.createByLead) {
-        return this.createError({
-            path: 'createBy',
-            message: 'Recipient Is required',
-        });
-    }
+const isDate = (value) => !value || !Number.isNaN(new Date(value).getTime());
+
+// Time of a call or an email (value of an <input type="datetime-local">)
+export const activityDateSchema = yup.string().required('Vui lòng chọn thời gian').test('date', 'Thời gian không hợp lệ', isDate);
+
+// Calls and emails are logged for a customer (category "contact", field
+// createBy) or a lead (category "lead", field createByLead)
+export const requireCustomer = (schema) => schema.test('customer', 'Vui lòng chọn khách', function check(values) {
+    const isLead = values?.category === 'lead';
+    if (!values || (isLead ? values.createByLead : values.createBy)) return true;
+    return this.createError({
+        path: isLead ? 'createByLead' : 'createBy',
+        message: isLead ? 'Vui lòng chọn khách tiềm năng' : 'Vui lòng chọn khách hàng',
+    });
 });
+
+export const phoneCallSchema = requireCustomer(yup.object({
+    category: yup.string().oneOf(['contact', 'lead']),
+    createBy: yup.string().nullable(),
+    createByLead: yup.string().nullable(),
+    recipient: yup.string().trim()
+        .required('Vui lòng nhập số điện thoại')
+        .test('phone', 'Số điện thoại không hợp lệ', (value) => !value || isValidPhone(value)),
+    callResult: yup.string().required('Vui lòng chọn kết quả cuộc gọi'),
+    startDate: activityDateSchema,
+    callDuration: yup.number().typeError('Thời lượng phải là số').nullable()
+        .min(0, 'Thời lượng không được âm')
+        .max(600, 'Thời lượng tối đa 600 phút'),
+    callNotes: yup.string().nullable().max(5000, 'Nội dung tối đa 5000 ký tự'),
+}));

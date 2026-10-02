@@ -1,110 +1,110 @@
-import { Box, Button, Flex, Grid, GridItem, Heading, Text, useDisclosure } from "@chakra-ui/react";
-import Card from "components/card/Card";
-import { HSeparator } from "components/separator/Separator";
-import Spinner from "components/spinner/Spinner";
-import moment from "moment";
-import { useEffect, useState } from "react";
-import { IoIosArrowBack } from "react-icons/io";
-import { Link, useParams } from "react-router-dom";
-import { getApi } from "services/api";
+import {
+    Alert, AlertIcon, Box, Button, Flex, Heading, HStack, Icon, Spinner, Stack, Text, useDisclosure, Wrap, WrapItem,
+} from '@chakra-ui/react';
+import Card from 'components/card/Card';
+import ContactActions from 'components/crm/ContactActions';
+import DetailGrid from 'components/crm/DetailGrid';
+import StatusBadge from 'components/crm/StatusBadge';
+import { CALL_RESULTS } from 'constants/realEstate';
+import useApiData from 'hooks/useApiData';
+import { MdAddIcCall, MdArrowBack, MdPerson, MdPhone } from 'react-icons/md';
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { formatDateTime, formatPhone, telLink } from 'utils/format';
+import CallForm from './CallForm';
+import {
+    CustomerLink, customerKindLabel, customerPath, formatActivityDate, formatCallDuration, isLeadActivity,
+} from './components/activity';
 
-const View = () => {
+export default function CallView() {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const { data: call, isLoading, error } = useApiData(`api/phoneCall/view/${id}`, { initial: null });
+    const form = useDisclosure();
 
-    const param = useParams()
-
-    const [data, setData] = useState()
-    const user = JSON.parse(localStorage.getItem("user"))
-    const [isLoding, setIsLoding] = useState(false)
-
-    const fetchData = async () => {
-        setIsLoding(true)
-        let response = await getApi('api/phoneCall/view/', param.id)
-        setData(response?.data);
-        setIsLoding(false)
+    if (isLoading && !call) return <Flex justify="center" py={20}><Spinner /></Flex>;
+    if (error || !call?._id) {
+        return (
+            <Alert status="warning" borderRadius="md" flexWrap="wrap" gap={2}>
+                <AlertIcon />
+                {error && error.status !== 404 ? 'Không tải được cuộc gọi.' : 'Không tìm thấy cuộc gọi (có thể đã bị xóa hoặc bạn không có quyền xem).'}
+                <Button ml="auto" size="sm" onClick={() => navigate('/calls')}>Về danh sách</Button>
+            </Alert>
+        );
     }
-    useEffect(() => {
-        fetchData()
-    }, [])
+
+    const path = customerPath(call);
+    const customerName = call.createByName || 'khách';
 
     return (
-        <>
+        <Stack spacing={5}>
+            <Card>
+                <Flex direction={{ base: 'column', lg: 'row' }} justify="space-between" gap={4}>
+                    <Stack spacing={2}>
+                        <HStack spacing={3} flexWrap="wrap">
+                            <StatusBadge options={CALL_RESULTS} value={call.callResult} />
+                            <Text fontSize="sm" color="gray.500">{formatActivityDate(call)}</Text>
+                        </HStack>
+                        <Heading size="lg">Cuộc gọi với {customerName}</Heading>
+                        {call.recipient && <Text fontSize="lg" fontWeight="600">{formatPhone(call.recipient)}</Text>}
+                    </Stack>
+                    <Wrap spacing={2} align="center">
+                        {telLink(call.recipient) && (
+                            <WrapItem>
+                                <Button as="a" href={telLink(call.recipient)} leftIcon={<Icon as={MdPhone} />} colorScheme="green">Gọi lại</Button>
+                            </WrapItem>
+                        )}
+                        <WrapItem>
+                            <Button leftIcon={<Icon as={MdAddIcCall} />} variant="brand" onClick={form.onOpen}>Ghi cuộc gọi mới</Button>
+                        </WrapItem>
+                        {path && (
+                            <WrapItem>
+                                <Button as={RouterLink} to={path} leftIcon={<Icon as={MdPerson} />} variant="outline">
+                                    {isLeadActivity(call) ? 'Xem khách tiềm năng' : 'Xem khách hàng'}
+                                </Button>
+                            </WrapItem>
+                        )}
+                        <WrapItem>
+                            <Button leftIcon={<Icon as={MdArrowBack} />} variant="ghost" onClick={() => navigate('/calls')}>Danh sách cuộc gọi</Button>
+                        </WrapItem>
+                    </Wrap>
+                </Flex>
+            </Card>
 
-            {isLoding ?
-                <Flex justifyContent={'center'} alignItems={'center'} width="100%" >
-                    <Spinner />
-                </Flex> : <>
-                    <Grid templateColumns="repeat(4, 1fr)" gap={3}>
-                        <GridItem colSpan={{ base: 4 }}>
-                            <Card >
-                                <Grid templateColumns={{ base: "1fr" }} gap={4}>
-                                    <GridItem colSpan={2}>
-                                        <Box>
-                                            <Heading size="md" mb={3}>
-                                                Call View page
-                                            </Heading>
-                                            <HSeparator />
-                                        </Box>
-                                    </GridItem>
-                                    <Grid templateColumns={'repeat(2, 1fr)'} gap={4}>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Sender </Text>
-                                            <Text>{data?.senderName ? data?.senderName : ' - '}</Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Recipient </Text>
-                                            <Text>{data?.recipient ? data?.recipient : ' - '}</Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Create to </Text>
-                                            <Link to={data?.createBy ? user?.role !== 'admin' ? `/contactView/${data?.createBy}` : `/admin/contactView/${data?.createBy}` : user?.role !== 'admin' ? `/leadView/${data?.createByLead}` : `/admin/leadView/${data?.createByLead}`}>
-                                                <Text color='green.400' sx={{ '&:hover': { color: 'blue.500', textDecoration: 'underline' } }}>{data?.createByName ? data?.createByName : ' - '}</Text>
-                                            </Link>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Realeted To </Text>
-                                            <Text>{data?.createBy ? "contact" : data?.createByLead && "lead"}</Text>
-                                        </GridItem>
+            <Card>
+                <DetailGrid
+                    title="Chi tiết cuộc gọi"
+                    items={[
+                        { label: 'Khách', value: <CustomerLink item={call} showKind={false} /> },
+                        { label: 'Loại khách', value: customerKindLabel(call) },
+                        {
+                            label: 'Số điện thoại',
+                            value: call.recipient ? (
+                                <HStack spacing={1}>
+                                    <Text>{formatPhone(call.recipient)}</Text>
+                                    <ContactActions phone={call.recipient} />
+                                </HStack>
+                            ) : '',
+                        },
+                        { label: 'Kết quả', value: call.callResult ? <StatusBadge options={CALL_RESULTS} value={call.callResult} /> : '' },
+                        { label: 'Thời gian gọi', value: formatActivityDate(call) },
+                        { label: 'Thời lượng', value: formatCallDuration(call.callDuration) },
+                        { label: 'Nhân viên', value: call.senderName },
+                        { label: 'Ghi nhận lúc', value: formatDateTime(call.timestamp) },
+                        {
+                            label: 'Nội dung trao đổi',
+                            value: call.callNotes ? <Box fontWeight="normal">{call.callNotes}</Box> : '',
+                            span: 2,
+                        },
+                    ]}
+                />
+            </Card>
 
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Start Date </Text>
-                                            <Text> {data?.startDate ? moment(data?.startDate).format('lll ') : ' - '} </Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}>End Date </Text>
-                                            <Text> {data?.endDate ? moment(data?.endDate).format('lll ') : ' - '} </Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Timestamp </Text>
-                                            <Text> {data?.timestamp ? moment(data?.timestamp).format('DD-MM-YYYY  h:mma ') : ' - '} [{data?.timestamp ? moment(data?.timestamp).toNow() : ' - '}]</Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Call Duration </Text>
-                                            <Text>{data?.callDuration ? data?.callDuration : ' - '}</Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Call Notes </Text>
-                                            <pre style={{ whiteSpace: 'pre-wrap' }}>{data?.callNotes ? data?.callNotes : ' - '}</pre>
-                                        </GridItem>
-                                    </Grid>
-                                </Grid>
-                            </Card>
-                        </GridItem>
-
-                    </Grid>
-                </>}
-
-            {/* <Card mt={3}>
-                <Grid templateColumns="repeat(6, 1fr)" gap={1}>
-                    <GridItem colStart={6} >
-                        <Flex justifyContent={"right"}>
-                            <Button onClick={() => setEdit(true)} leftIcon={<EditIcon />} variant="outline" colorScheme="green">Edit</Button>
-                            <Button style={{ background: 'red.800' }} ml={2.5} onClick={() => setDelete(true)} leftIcon={<DeleteIcon />} colorScheme="red" >Delete</Button>
-                        </Flex>
-                    </GridItem>
-                </Grid>
-            </Card> */}
-        </>
+            <CallForm
+                isOpen={form.isOpen}
+                onClose={form.onClose}
+                defaults={{ createBy: call.createBy, createByLead: call.createByLead, recipient: call.recipient }}
+                onSaved={(created) => { if (created?._id) navigate(`/calls/${created._id}`); }}
+            />
+        </Stack>
     );
-};
-
-export default View;
+}

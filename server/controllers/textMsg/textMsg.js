@@ -1,16 +1,19 @@
 const TextMsg = require('../../model/schema/textMsg');
 const User = require('../../model/schema/user');
-const mongoose = require('mongoose');
+const { castIds, ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access');
+const { nameExpr } = require('../../utils/names');
 
 
 const add = async (req, res) => {
     try {
-        const result = new TextMsg(req.body);
-        const user = await User.findById({ _id: result.sender });
-        user.textsent = user.textsent + 1;
+        const result = new TextMsg({ ...req.body, sender: resolveOwner(req, req.body.sender) });
+        if (!await User.exists({ _id: result.sender, deleted: false })) {
+            return res.status(400).json({ error: 'Invalid sender value' });
+        }
 
-        await user.save();
         await result.save();
+        // Only count the message once it is stored
+        await User.updateOne({ _id: result.sender }, { $inc: { textsent: 1 } });
         res.status(200).json(result);
     } catch (err) {
         console.error('Failed to create :', err);
@@ -37,10 +40,7 @@ const index = async (req, res) => {
     //     await TextMsg.updateOne({ _id: data._id }, { $set: { timestamp: randomDate } });
     // }
 
-    const query = req.query
-    if (query.sender) {
-        query.sender = new mongoose.Types.ObjectId(query.sender);
-    }
+    const query = castIds(scopedQuery(req, 'sender'), ['sender'])
     try {
         let result = await TextMsg.aggregate([
             { $match: query },
@@ -65,9 +65,9 @@ const index = async (req, res) => {
             { $match: { 'contact.deleted': false, 'users.deleted': false } },
             {
                 $addFields: {
-                    senderName: { $concat: ['$users.firstName', ' ', '$users.lastName'] },
+                    senderName: nameExpr('$users'),
                     deleted: '$contact.deleted',
-                    createByName: { $concat: ['$contact.title', ' ', '$contact.firstName', ' ', '$contact.lastName'] },
+                    createByName: nameExpr('$contact'),
                 }
             },
             { $project: { contact: 0, users: 0 } },
@@ -83,7 +83,7 @@ const index = async (req, res) => {
 
 const view = async (req, res) => {
     try {
-        let result = await TextMsg.findOne({ _id: req.params.id })
+        let result = await TextMsg.findOne({ _id: req.params.id, ...ownerFilter(req, 'sender') })
 
         if (!result) return res.status(404).json({ message: "no Data Found." })
 
@@ -110,9 +110,9 @@ const view = async (req, res) => {
             { $match: { 'contact.deleted': false } },
             {
                 $addFields: {
-                    senderName: { $concat: ['$users.firstName', ' ', '$users.lastName'] },
+                    senderName: nameExpr('$users'),
                     deleted: '$contact.deleted',
-                    createByName: { $concat: ['$contact.title', ' ', '$contact.firstName', ' ', '$contact.lastName'] },
+                    createByName: nameExpr('$contact'),
                 }
             },
             { $project: { contact: 0, users: 0 } }

@@ -1,35 +1,36 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom';
 import 'assets/css/App.css';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import AuthLayout from 'layouts/auth';
-import AdminLayout from 'layouts/admin';
-import UserLayout from 'layouts/user';
+import CrmLayout from 'layouts/crm';
 import { ChakraProvider } from '@chakra-ui/react';
 import theme from 'theme/theme';
 import { ThemeEditorProvider } from '@hypertheme-editor/chakra-ui';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import moment from 'moment';
+import 'moment/locale/vi';
+import { COMPANY_NAME } from 'config';
+import { currentUser } from 'services/crm';
+
+moment.locale('vi');
+document.title = COMPANY_NAME;
+document.documentElement.lang = 'vi';
 
 function App() {
 	const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-
-	const user = JSON.parse(localStorage.getItem("user"))
+	const user = currentUser();
+	// Re-render on navigation: logging in or out switches the layout
 	useNavigate()
 
 	return (
 		<>
-			<ToastContainer />
+			<ToastContainer position="top-right" autoClose={3000} newestOnTop />
 			<Routes>
-				{token && user?.role ? (
-					user?.role == 'user' ?
-						<Route path="/*" element={<UserLayout />} />
-						: user?.role === 'admin' ?
-							<Route path="/*" element={<AdminLayout />} />
-							: ''
-				) : (
-					<Route path="/*" element={<AuthLayout />} />
-				)}
+				{token && user?.role
+					? <Route path="/*" element={<CrmLayout />} />
+					: <Route path="/*" element={<AuthLayout />} />}
 			</Routes>
 		</>
 	);
@@ -47,4 +48,3 @@ ReactDOM.render(
 	</ChakraProvider>
 	, document.getElementById('root')
 );
-

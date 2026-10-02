@@ -1,6 +1,26 @@
 import axios from "axios"
 import { constant } from "constant"
 
+// A 401 means the stored session is not valid anymore (token signed with an old
+// JWT_SECRET, user deleted by an admin...): drop it and go back to the sign in page
+// instead of showing empty pages. Failed logins also answer 401, they are left alone.
+// The stored user is kept: pages still rendering until the redirect read it, and
+// the next login replaces it.
+const handleUnauthorized = (error, path) => {
+    const hasSession = localStorage.getItem("token") || sessionStorage.getItem("token")
+    if (error?.response?.status === 401 && hasSession && !path.includes('api/user/login')) {
+        localStorage.removeItem('token')
+        sessionStorage.removeItem('token')
+        window.location.assign('/auth/sign-in')
+    }
+}
+
+// Validation, permission or duplicate answers (4xx) are shown to the user, only
+// unexpected failures are logged
+const logError = (error) => {
+    const status = error?.response?.status
+    if (!status || status >= 500) console.error(error)
+}
 
 export const postApi = async (path, data, login) => {
     try {
@@ -20,7 +40,8 @@ export const postApi = async (path, data, login) => {
         }
         return result
     } catch (e) {
-        console.error(e)
+        logError(e)
+        handleUnauthorized(e, path)
         return e
     }
 }
@@ -33,7 +54,8 @@ export const putApi = async (path, data, id) => {
         })
         return result
     } catch (e) {
-        console.error(e)
+        logError(e)
+        handleUnauthorized(e, path)
         return e
     }
 }
@@ -50,7 +72,8 @@ export const deleteApi = async (path, id) => {
         }
         return result
     } catch (e) {
-        console.error(e)
+        logError(e)
+        handleUnauthorized(e, path)
         return e
     }
 }
@@ -67,7 +90,8 @@ export const deleteManyApi = async (path, data) => {
         }
         return result
     } catch (e) {
-        console.error(e)
+        logError(e)
+        handleUnauthorized(e, path)
         return e
     }
 }
@@ -91,7 +115,8 @@ export const getApi = async (path, id) => {
             return result
         }
     } catch (e) {
-        console.error(e)
+        logError(e)
+        handleUnauthorized(e, path)
         return e
     }
 }

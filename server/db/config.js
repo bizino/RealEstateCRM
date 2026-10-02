@@ -13,15 +13,20 @@ const connectDB = async (DATABASE_URL, DATABASE) => {
 
         let adminExisting = await User.find({ role: 'admin' });
         if (adminExisting.length <= 0) {
-            const phoneNumber = 7874263694
-            const firstName = 'Prolink'
-            const lastName = 'Infotech'
-            const username = 'admin@gmail.com'
-            const password = 'admin123'
+            const fullName = 'Quản trị viên'
+            const firstName = 'viên'
+            const lastName = 'Quản trị'
+            // Set ADMIN_EMAIL / ADMIN_PASSWORD before the first start of a new
+            // installation, the demo credentials are only a fallback
+            const username = process.env.ADMIN_EMAIL || 'admin@gmail.com'
+            const password = process.env.ADMIN_PASSWORD || 'admin123'
+            if (!process.env.ADMIN_PASSWORD) {
+                console.warn(`WARNING: admin ${username} was created with the default demo password, set ADMIN_PASSWORD for production installations.`);
+            }
             // Hash the password
             const hashedPassword = await bcrypt.hash(password, 10);
             // Create a new user
-            const user = new User({ _id: new mongoose.Types.ObjectId('64d33173fd7ff3fa0924a109'), username, password: hashedPassword, firstName, lastName, phoneNumber, role: 'admin' });
+            const user = new User({ _id: new mongoose.Types.ObjectId('64d33173fd7ff3fa0924a109'), username, password: hashedPassword, fullName, firstName, lastName, role: 'admin', createdDate: new Date() });
             // Save the user to the database
             await user.save();
             console.log("Admin created successfully..");

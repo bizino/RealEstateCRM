@@ -1,5 +1,8 @@
 const stripeModule = require('stripe')
 
+// Page Stripe sends the customer back to after the checkout
+const paymentsPageUrl = () => `${(process.env.CLIENT_URL || 'https://real-estate-crm-jet.vercel.app').replace(/\/+$/, '')}/payments`;
+
 
 const index = async (req, res) => {
     const stripe = stripeModule(process.env.STRIPE_PRIVATE_KEY);
@@ -12,10 +15,13 @@ const index = async (req, res) => {
 
         for (const paymentIntent of paymentIntents) {
             const paymentMethodId = paymentIntent.payment_method;
+            // Unfinished payments have no payment method yet
+            if (!paymentMethodId) continue;
             const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
 
             // Extract card details
             const cardDetails = paymentMethod.card;
+            if (!cardDetails) continue;
             const billingDetails = paymentMethod.billing_details;
             const expMonth = cardDetails.exp_month < 10 ? `0${cardDetails.exp_month}` : cardDetails.exp_month;
             const expYear = cardDetails.exp_year.toString().slice(-2); // Get the last two digits of the year
@@ -41,13 +47,17 @@ const index = async (req, res) => {
 }
 
 const add = async (req, res) => {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0 || items.some((item) => !(Number(item?.price) > 0))) {
+        return res.status(400).json({ error: 'At least one item with a positive price is required' });
+    }
     const stripe = stripeModule(process.env.STRIPE_PRIVATE_KEY);
     try {
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
             mode: "payment",
             customer_email: req.body.customer_email,
-            line_items: req.body.items.map((item) => {
+            line_items: items.map((item) => {
                 return {
                     price_data: {
                         currency: "inr",
@@ -55,13 +65,14 @@ const add = async (req, res) => {
                             name: item.name,
                             description: item.description,
                         },
-                        unit_amount: item.price * 100,
+                        // Stripe expects an integer amount in paise (19.99 * 100 = 1998.9999999999998)
+                        unit_amount: Math.round(Number(item.price) * 100),
                     },
                     quantity: item.quantity,
                 };
             }),
-            success_url: "https://real-estate-crm-jet.vercel.app/payments",
-            cancel_url: "https://real-estate-crm-jet.vercel.app/payments",
+            success_url: paymentsPageUrl(),
+            cancel_url: paymentsPageUrl(),
         });
         res.json({ url: session.url });
     } catch (e) {

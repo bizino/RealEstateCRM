@@ -10,6 +10,17 @@ const meetingHistory = new mongoose.Schema({
         type: mongoose.Schema.ObjectId,
         ref: 'Lead',
     }],
+    // Property shown to the customer (site visit)
+    property: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'property',
+    },
+    // viewing | consulting | signing | other
+    meetingType: String,
+    // scheduled | done | cancelled
+    status: { type: String, default: 'scheduled' },
+    // Outcome and feedback of the customer
+    result: String,
     location: String,
     related: String,
     dateTime: String,
@@ -23,7 +34,12 @@ const meetingHistory = new mongoose.Schema({
     timestamp: {
         type: Date,
         default: Date.now
-    }
+    },
+    updatedDate: Date,
+    deleted: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 module.exports = mongoose.model('meetingHistory', meetingHistory);

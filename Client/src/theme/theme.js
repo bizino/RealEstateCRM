@@ -10,8 +10,12 @@ import { switchStyles } from "./components/switch";
 import { linkStyles } from "./components/link";
 import { breakpoints } from "./foundations/breakpoints";
 import { globalStyles } from "./styles";
+
+// Font with the whole Vietnamese alphabet, for headings too
+const fonts = { heading: "'Be Vietnam Pro', sans-serif", body: "'Be Vietnam Pro', sans-serif" };
+
 export default extendTheme(
-  { breakpoints }, // Breakpoints
+  { breakpoints, fonts }, // Breakpoints and fonts
   globalStyles,
   badgeStyles, // badge styles
   buttonStyles, // button styles

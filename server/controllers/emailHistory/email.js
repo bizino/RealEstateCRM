@@ -1,20 +1,21 @@
 const { sendEmail } = require('../../middelwares/mail');
 const EmailHistory = require('../../model/schema/email');
 const User = require('../../model/schema/user');
-const mongoose = require('mongoose');
+const { castIds, isValidId, ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access');
+const { nameExpr } = require('../../utils/names');
 
 const add = async (req, res) => {
     try {
         const { sender, recipient, subject, message, startDate, endDate, createBy, createByLead } = req.body;
 
-        if (createBy && !mongoose.Types.ObjectId.isValid(createBy)) {
-            res.status(400).json({ error: 'Invalid createBy value' });
+        if (createBy && !isValidId(createBy)) {
+            return res.status(400).json({ error: 'Invalid createBy value' });
         }
-        if (createByLead && !mongoose.Types.ObjectId.isValid(createByLead)) {
-            res.status(400).json({ error: 'Invalid createByLead value' });
+        if (createByLead && !isValidId(createByLead)) {
+            return res.status(400).json({ error: 'Invalid createByLead value' });
         }
 
-        const email = { sender, recipient, subject, message, startDate, endDate }
+        const email = { sender: resolveOwner(req, sender), recipient, subject, message, startDate, endDate }
 
         if (createBy) {
             email.createBy = createBy;
@@ -23,13 +24,15 @@ const add = async (req, res) => {
             email.createByLead = createByLead;
         }
 
-        const user = await User.findById({ _id: email.sender });
-        user.emailsent = user.emailsent + 1;
-        await user.save();
+        if (!await User.exists({ _id: email.sender, deleted: false })) {
+            return res.status(400).json({ error: 'Invalid sender value' });
+        }
         // sendEmail(email.recipient, email.subject, email.message)
 
         const result = new EmailHistory(email);
         await result.save();
+        // Only count the email once it is stored
+        await User.updateOne({ _id: email.sender }, { $inc: { emailsent: 1 } });
         res.status(200).json({ result });
     } catch (err) {
         console.error('Failed to create :', err);
@@ -39,10 +42,7 @@ const add = async (req, res) => {
 
 const index = async (req, res) => {
     try {
-        const query = req.query
-        if (query.sender) {
-            query.sender = new mongoose.Types.ObjectId(query.sender);
-        }
+        const query = castIds(scopedQuery(req, 'sender'), ['sender'])
 
         let result = await EmailHistory.aggregate([
             { $match: query },
@@ -76,7 +76,7 @@ const index = async (req, res) => {
             { $match: { 'users.deleted': false } },
             {
                 $addFields: {
-                    senderName: { $concat: ['$users.firstName', ' ', '$users.lastName'] },
+                    senderName: nameExpr('$users'),
                     deleted: {
                         $cond: [
                             { $eq: ['$createByRef.deleted', false] },
@@ -87,8 +87,8 @@ const index = async (req, res) => {
                     createByName: {
                         $cond: {
                             if: '$createByRef',
-                            then: { $concat: ['$createByRef.title', ' ', '$createByRef.firstName', ' ', '$createByRef.lastName'] },
-                            else: { $concat: ['$createByrefLead.leadName'] }
+                            then: nameExpr('$createByRef'),
+                            else: { $ifNull: ['$createByrefLead.leadName', ''] }
                         }
                     },
                 }
@@ -112,7 +112,7 @@ const index = async (req, res) => {
 
 const view = async (req, res) => {
     try {
-        let result = await EmailHistory.findOne({ _id: req.params.id })
+        let result = await EmailHistory.findOne({ _id: req.params.id, ...ownerFilter(req, 'sender') })
 
         if (!result) return res.status(404).json({ message: "no Data Found." })
 
@@ -149,6 +149,7 @@ const view = async (req, res) => {
             {
                 $addFields: {
                     senderEmail: '$users.username',
+                    senderName: nameExpr('$users'),
                     deleted: {
                         $cond: [
                             { $eq: ['$createByRef.deleted', false] },
@@ -159,8 +160,8 @@ const view = async (req, res) => {
                     createByName: {
                         $cond: {
                             if: '$createByRef',
-                            then: { $concat: ['$createByRef.title', ' ', '$createByRef.firstName', ' ', '$createByRef.lastName'] },
-                            else: { $concat: ['$createByrefLead.leadName'] }
+                            then: nameExpr('$createByRef'),
+                            else: { $ifNull: ['$createByrefLead.leadName', ''] }
                         }
                     },
                 }

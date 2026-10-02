@@ -1,18 +1,20 @@
 const PhoneCall = require('../../model/schema/phoneCall');
+const Lead = require('../../model/schema/lead');
 const User = require('../../model/schema/user');
-const mongoose = require('mongoose');
+const { castIds, isValidId, ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access');
+const { nameExpr } = require('../../utils/names');
 
 const add = async (req, res) => {
     try {
-        const { sender, recipient, callDuration, startDate, endDate, callNotes, createBy, createByLead } = req.body;
+        const { sender, recipient, callDuration, startDate, endDate, callNotes, callResult, createBy, createByLead } = req.body;
 
-        if (createBy && !mongoose.Types.ObjectId.isValid(createBy)) {
-            res.status(400).json({ error: 'Invalid createBy value' });
+        if (createBy && !isValidId(createBy)) {
+            return res.status(400).json({ error: 'Invalid createBy value' });
         }
-        if (createByLead && !mongoose.Types.ObjectId.isValid(createByLead)) {
-            res.status(400).json({ error: 'Invalid createByLead value' });
+        if (createByLead && !isValidId(createByLead)) {
+            return res.status(400).json({ error: 'Invalid createByLead value' });
         }
-        const phoneCall = { sender, recipient, callDuration, startDate, endDate, callNotes }
+        const phoneCall = { sender: resolveOwner(req, sender), recipient, callDuration, startDate, endDate, callNotes, callResult }
 
         if (createBy) {
             phoneCall.createBy = createBy;
@@ -22,12 +24,21 @@ const add = async (req, res) => {
             phoneCall.createByLead = createByLead;
         }
 
-        const user = await User.findById({ _id: phoneCall.sender });
-        user.outboundcall = user.outboundcall + 1;
-        await user.save();
+        if (!await User.exists({ _id: phoneCall.sender, deleted: false })) {
+            return res.status(400).json({ error: 'Invalid sender value' });
+        }
 
         const result = new PhoneCall(phoneCall);
         await result.save();
+        // A new lead who picked up the phone has been contacted
+        if (createByLead && ['answered', 'callBack'].includes(callResult)) {
+            await Lead.updateOne(
+                { _id: createByLead, leadStatus: { $in: [null, '', 'new', 'pending'] } },
+                { $set: { leadStatus: 'contacted', updatedDate: new Date() } }
+            );
+        }
+        // Only count the call once it is stored
+        await User.updateOne({ _id: phoneCall.sender }, { $inc: { outboundcall: 1 } });
         res.status(200).json({ result });
     } catch (err) {
         console.error('Failed to create :', err);
@@ -38,10 +49,7 @@ const add = async (req, res) => {
 const index = async (req, res) => {
     try {
 
-        const query = req.query
-        if (query.sender) {
-            query.sender = new mongoose.Types.ObjectId(query.sender);
-        }
+        const query = castIds(scopedQuery(req, 'sender'), ['sender'])
         let result = await PhoneCall.aggregate([
             { $match: query },
             {
@@ -74,7 +82,7 @@ const index = async (req, res) => {
             { $match: { 'users.deleted': false } },
             {
                 $addFields: {
-                    senderName: { $concat: ['$users.firstName', ' ', '$users.lastName'] },
+                    senderName: nameExpr('$users'),
                     deleted: {
                         $cond: [
                             { $eq: ['$contact.deleted', false] },
@@ -85,8 +93,8 @@ const index = async (req, res) => {
                     createByName: {
                         $cond: {
                             if: '$contact',
-                            then: { $concat: ['$contact.title', ' ', '$contact.firstName', ' ', '$contact.lastName'] },
-                            else: { $concat: ['$createByrefLead.leadName'] }
+                            then: nameExpr('$contact'),
+                            else: { $ifNull: ['$createByrefLead.leadName', ''] }
                         }
                     },
                 }
@@ -103,7 +111,7 @@ const index = async (req, res) => {
 
 const view = async (req, res) => {
     try {
-        let result = await PhoneCall.findOne({ _id: req.params.id })
+        let result = await PhoneCall.findOne({ _id: req.params.id, ...ownerFilter(req, 'sender') })
 
         if (!result) return res.status(404).json({ message: "no Data Found." })
 
@@ -139,7 +147,7 @@ const view = async (req, res) => {
             { $match: { 'users.deleted': false } },
             {
                 $addFields: {
-                    senderName: { $concat: ['$users.firstName', ' ', '$users.lastName'] },
+                    senderName: nameExpr('$users'),
                     deleted: {
                         $cond: [
                             { $eq: ['$contact.deleted', false] },
@@ -150,8 +158,8 @@ const view = async (req, res) => {
                     createByName: {
                         $cond: {
                             if: '$contact',
-                            then: { $concat: ['$contact.title', ' ', '$contact.firstName', ' ', '$contact.lastName'] },
-                            else: { $concat: ['$createByrefLead.leadName'] }
+                            then: nameExpr('$contact'),
+                            else: { $ifNull: ['$createByrefLead.leadName', ''] }
                         }
                     },
                 }

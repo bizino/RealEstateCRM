@@ -1,24 +1,21 @@
 const nodemailer = require('nodemailer');
-const User = require('../model/schema/user');
-const bcrypt = require('bcrypt');
 
-// Function to send an email
+// Function to send an email (SMTP settings come from server/.env)
 const sendEmail = async (to, subject, text) => {
     try {
         if (to) {
 
-            // Create a transporter using the SMTP settings for Outlook
             const transporter = nodemailer.createTransport({
-                host: 'smtp.office365.com',
-                port: 587,
+                host: process.env.SMTP_HOST || 'smtp.office365.com',
+                port: Number(process.env.SMTP_PORT) || 587,
                 auth: {
-                    user: 'prolink@gmail.com',
-                    pass: 'emailpass@17'
+                    user: process.env.SMTP_USER,
+                    pass: process.env.SMTP_PASS
                 }
             });
 
             const mailOptions = {
-                from: 'prolink@gmail.com',
+                from: process.env.SMTP_FROM || process.env.SMTP_USER,
                 to: to,
                 subject: subject,
                 text: text

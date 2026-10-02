@@ -1,120 +1,106 @@
-import { Box, Button, Flex, Grid, GridItem, Heading, Text, useDisclosure } from "@chakra-ui/react";
-import Card from "components/card/Card";
-import { HSeparator } from "components/separator/Separator";
-import Spinner from "components/spinner/Spinner";
-import moment from "moment";
-import { useEffect, useState } from "react";
-import { IoIosArrowBack } from "react-icons/io";
-import { Link, useParams } from "react-router-dom";
-import { getApi } from "services/api";
+import {
+    Alert, AlertIcon, Box, Button, Flex, Heading, Icon, Link, Spinner, Stack, Text, useColorModeValue, useDisclosure, Wrap, WrapItem,
+} from '@chakra-ui/react';
+import Card from 'components/card/Card';
+import DetailGrid from 'components/crm/DetailGrid';
+import useApiData from 'hooks/useApiData';
+import { MdArrowBack, MdOutlineEmail, MdPerson, MdSend } from 'react-icons/md';
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { currentUser } from 'services/crm';
+import { formatDateTime, userName } from 'utils/format';
+import {
+    CustomerLink, customerKindLabel, customerPath, formatActivityDate, isLeadActivity,
+} from 'views/admin/phoneCall/components/activity';
+import EmailForm from './EmailForm';
 
-const View = () => {
+export default function EmailView() {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const me = currentUser();
+    const isAdmin = me?.role === 'admin';
+    const { data: email, isLoading, error } = useApiData(`api/email/view/${id}`, { initial: null });
+    // The detail endpoint only gives the login email of the employee: admins get the name from the list of employees
+    const { data: users } = useApiData('api/user/options', { enabled: isAdmin });
+    const form = useDisclosure();
+    const messageBg = useColorModeValue('gray.50', 'whiteAlpha.100');
 
-    const param = useParams()
-
-    const [data, setData] = useState()
-    const { isOpen, onOpen, onClose } = useDisclosure()
-    const [edit, setEdit] = useState(false);
-    const [deleteModel, setDelete] = useState(false);
-    const user = JSON.parse(localStorage.getItem("user"))
-    const [isLoding, setIsLoding] = useState(false)
-
-    const size = "lg";
-
-    const fetchData = async () => {
-        setIsLoding(true)
-        let response = await getApi('api/email/view/', param.id)
-        setData(response?.data);
-        setIsLoding(false)
+    if (isLoading && !email) return <Flex justify="center" py={20}><Spinner /></Flex>;
+    if (error || !email?._id) {
+        return (
+            <Alert status="warning" borderRadius="md" flexWrap="wrap" gap={2}>
+                <AlertIcon />
+                {error && error.status !== 404 ? 'Không tải được email.' : 'Không tìm thấy email (có thể đã bị xóa hoặc bạn không có quyền xem).'}
+                <Button ml="auto" size="sm" onClick={() => navigate('/emails')}>Về danh sách</Button>
+            </Alert>
+        );
     }
-    useEffect(() => {
-        fetchData()
-    }, [])
+
+    const sender = String(email.sender || '') === me?._id ? me : (Array.isArray(users) ? users : []).find((user) => user._id === String(email.sender));
+    const senderName = email.senderName || userName(sender) || email.senderEmail || '';
+    const path = customerPath(email);
 
     return (
-        <>
-            {isLoding ?
-                <Flex justifyContent={'center'} alignItems={'center'} width="100%" >
-                    <Spinner />
-                </Flex> : <>
+        <Stack spacing={5}>
+            <Card>
+                <Flex direction={{ base: 'column', lg: 'row' }} justify="space-between" gap={4}>
+                    <Stack spacing={2} minW={0}>
+                        <Text fontSize="sm" color="gray.500">{formatActivityDate(email)}</Text>
+                        <Heading size="lg" wordBreak="break-word">{email.subject || '(không có tiêu đề)'}</Heading>
+                        <Text color="gray.600" wordBreak="break-all">Gửi tới: {email.recipient || '—'}</Text>
+                    </Stack>
+                    <Wrap spacing={2} align="center">
+                        {email.recipient && (
+                            <WrapItem>
+                                <Button as="a" href={`mailto:${email.recipient}`} leftIcon={<Icon as={MdSend} />} variant="outline">Gửi email</Button>
+                            </WrapItem>
+                        )}
+                        <WrapItem>
+                            <Button leftIcon={<Icon as={MdOutlineEmail} />} variant="brand" onClick={form.onOpen}>Ghi email mới</Button>
+                        </WrapItem>
+                        {path && (
+                            <WrapItem>
+                                <Button as={RouterLink} to={path} leftIcon={<Icon as={MdPerson} />} variant="outline">
+                                    {isLeadActivity(email) ? 'Xem khách tiềm năng' : 'Xem khách hàng'}
+                                </Button>
+                            </WrapItem>
+                        )}
+                        <WrapItem>
+                            <Button leftIcon={<Icon as={MdArrowBack} />} variant="ghost" onClick={() => navigate('/emails')}>Danh sách email</Button>
+                        </WrapItem>
+                    </Wrap>
+                </Flex>
+            </Card>
 
-                    <Grid templateColumns="repeat(6, 1fr)" mb={3} gap={1}>
-                        <GridItem colStart={6} >
-                            <Flex justifyContent={'right'} >
-                                <Link to={"/email"}>
-                                    <Button leftIcon={<IoIosArrowBack />} variant="brand">
-                                        Back
-                                    </Button>
-                                </Link>
-                            </Flex>
-                        </GridItem>
-                    </Grid>
+            <Card>
+                <Stack spacing={6}>
+                    <DetailGrid
+                        title="Thông tin"
+                        items={[
+                            { label: 'Khách', value: <CustomerLink item={email} showKind={false} /> },
+                            { label: 'Loại khách', value: customerKindLabel(email) },
+                            { label: 'Gửi tới', value: email.recipient ? <Link href={`mailto:${email.recipient}`} color="brand.500">{email.recipient}</Link> : '' },
+                            { label: 'Thời gian gửi', value: formatActivityDate(email) },
+                            { label: 'Nhân viên', value: senderName },
+                            { label: 'Ghi nhận lúc', value: formatDateTime(email.timestamp) },
+                        ]}
+                    />
+                    <Box>
+                        <Heading size="sm" mb={3} color="gray.600">Nội dung</Heading>
+                        {email.message ? (
+                            <Box bg={messageBg} borderRadius="12px" p={4} whiteSpace="pre-wrap" wordBreak="break-word">{email.message}</Box>
+                        ) : (
+                            <Text color="gray.400">Không có nội dung</Text>
+                        )}
+                    </Box>
+                </Stack>
+            </Card>
 
-
-                    <Grid templateColumns="repeat(4, 1fr)" gap={3}>
-
-
-                        <GridItem colSpan={{ base: 4 }}>
-                            <Card >
-                                <Grid templateColumns={{ base: "1fr" }} gap={4}>
-                                    <GridItem colSpan={2}>
-                                        <Box>
-                                            <Heading size="md" mb={3}>
-                                                Email View page
-                                            </Heading>
-                                            <HSeparator />
-                                        </Box>
-                                    </GridItem>
-                                    <Grid templateColumns={'repeat(2, 1fr)'} gap={4}>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Sender </Text>
-                                            <Text>{data?.senderEmail ? data?.senderEmail : ' - '}</Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Recipient </Text>
-                                            <Text>{data?.recipient ? data?.recipient : ' - '}</Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Create From </Text>
-                                            <Link to={data?.createBy ? user?.role !== 'admin' ? `/contactView/${data?.createBy}` : `/admin/contactView/${data?.createBy}` : user?.role !== 'admin' ? `/leadView/${data?.createByLead}` : `/admin/leadView/${data?.createByLead}`}>
-                                                <Text color='green.400' sx={{ '&:hover': { color: 'blue.500', textDecoration: 'underline' } }}>{data?.createByName ? data?.createByName : ' - '}</Text>
-                                            </Link>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Realeted To </Text>
-                                            <Text>{data?.createBy ? "contact" : data?.createByLead && "lead"}</Text>
-                                        </GridItem>
-
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Start Date </Text>
-                                            <Text> {data?.startDate ? moment(data?.startDate).format('lll ') : ' - '} </Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}>End Date </Text>
-                                            <Text> {data?.endDate ? moment(data?.endDate).format('lll ') : ' - '} </Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2, md: 1 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Time stamp </Text>
-                                            <Text> {data?.timestamp ? moment(data?.timestamp).format('lll ') : ' - '} [{data?.timestamp ? moment(data?.timestamp).toNow() : ' - '}]</Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Subject </Text>
-                                            <Text>{data?.subject ? data?.subject : ' - '}</Text>
-                                        </GridItem>
-                                        <GridItem colSpan={{ base: 2 }}>
-                                            <Text fontSize="sm" fontWeight="bold" color={'blackAlpha.900'}> Message </Text>
-                                            <Text>{data?.message ? data?.message : ' - '}</Text>
-                                        </GridItem>
-                                    </Grid>
-                                </Grid>
-                            </Card>
-                        </GridItem>
-
-                    </Grid>
-
-                </>}
-        </>
+            <EmailForm
+                isOpen={form.isOpen}
+                onClose={form.onClose}
+                defaults={{ createBy: email.createBy, createByLead: email.createByLead, recipient: email.recipient }}
+                onSaved={(created) => { if (created?._id) navigate(`/emails/${created._id}`); }}
+            />
+        </Stack>
     );
-};
-
-export default View;
+}

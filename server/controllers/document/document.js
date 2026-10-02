@@ -1,17 +1,18 @@
 const multer = require('multer');
 const DocumentSchema = require('../../model/schema/document')
 const fs = require('fs');
-const mongoose = require('mongoose');
+const Contact = require('../../model/schema/contact');
+const Lead = require('../../model/schema/lead');
+const { castIds, isAdmin, isValidId, ownerFilter, resolveOwner, scopedQuery } = require('../../utils/access');
+const { decodeFileName, uniqueFileName, removeUploadedFiles } = require('../../utils/upload');
+const { nameExpr } = require('../../utils/names');
 
 
 const index = async (req, res) => {
+    // An invalid createBy throws here and is answered with a 400 by the error handler
+    const query = castIds(scopedQuery(req), ['createBy'])
+
     try {
-        const query = req.query
-        if (query.createBy) {
-            query.createBy = new mongoose.Types.ObjectId(query.createBy);
-        }
-
-
         const result = await DocumentSchema.aggregate([
             { $unwind: '$file' },
             { $match: { 'file.deleted': false } },
@@ -30,7 +31,7 @@ const index = async (req, res) => {
                 $group: {
                     _id: '$_id',  // Group by the document _id (folder's _id)
                     folderName: { $first: '$folderName' }, // Get the folderName (assuming it's the same for all files in the folder)
-                    createByName: { $first: { $concat: ['$creatorInfo.firstName', ' ', '$creatorInfo.lastName'] } },
+                    createByName: { $first: nameExpr('$creatorInfo') },
                     files: { $push: '$file' }, // Push the matching files back into an array
                 }
             },
@@ -41,6 +42,7 @@ const index = async (req, res) => {
     }
     catch (err) {
         console.error(err);
+        res.status(500).json({ message: 'Failed to load documents' });
     }
 }
 
@@ -52,18 +54,8 @@ const storage = multer.diskStorage({
         cb(null, folderPath);
     },
     filename: function (req, file, cb) {
-        const uploadDir = 'uploads/document/';
-        const filePath = uploadDir + file.originalname;
-
-        if (fs.existsSync(filePath)) {
-            // File with the same name already exists, generate a new filename
-            const timestamp = Date.now() + Math.floor(Math.random() * 90);
-            cb(null, file.originalname.split('.')[0] + '-' + timestamp + '.' + file.originalname.split('.')[1]);
-        } else {
-            // File doesn't exist, use the original filename
-            cb(null, file.originalname);
-        }
-        // cb(null, file.originalname);
+        // A timestamp is added when a file with the same name already exists
+        cb(null, uniqueFileName('uploads/document/', decodeFileName(file.originalname)));
     },
 });
 
@@ -73,19 +65,27 @@ const upload = multer({ storage: storage });
 
 const file = async (req, res) => {
     try {
-        const { filename, folderName, createBy } = req.body;
+        const { filename, folderName } = req.body;
+        const createBy = resolveOwner(req, req.body.createBy);
+
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ message: 'No files uploaded.' });
+        }
+        if (typeof folderName !== 'string' || folderName.trim() === '') {
+            await removeUploadedFiles(req.files);
+            return res.status(400).json({ message: 'Folder name is required.' });
+        }
 
         const url = req.protocol + '://' + req.get('host');
 
         const files = req.files.map((file) => ({
             fileName: filename || file.filename,
             path: file.path,
-            img: `${url}/api/document/images/${file.filename}`,
             createOn: new Date(),
         }));
 
-        // Check if the folder exists in the database
-        let folder = await DocumentSchema.findOne({ folderName });
+        // Check if the folder exists in the database (folders belong to one user)
+        let folder = await DocumentSchema.findOne({ folderName, createBy });
 
         if (!folder) {
             // DocumentSchema does not exist, create a new folder and add the file
@@ -98,13 +98,19 @@ const file = async (req, res) => {
             folder.file.push(...files); // Use spread operator to add elements of the files array
         }
 
+        // Files are read through the authenticated download endpoint
+        folder.file.slice(-files.length).forEach((saved) => {
+            saved.img = `${url}/api/document/download/${saved._id}`;
+        });
+
         // Save the folder in the database
         await folder.save();
 
         res.json({ message: 'Folder and files added successfully' });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ err, error: req });
+        await removeUploadedFiles(req.files);
+        res.status(500).json({ message: 'Failed to upload files' });
     }
 }
 
@@ -112,6 +118,9 @@ const file = async (req, res) => {
 const downloadFile = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!isValidId(id)) {
+            return res.status(400).json({ message: 'Invalid file id' });
+        }
 
         // Check if the folder exists in the database
         const folder = await DocumentSchema.findOne({ 'file._id': id });
@@ -124,11 +133,27 @@ const downloadFile = async (req, res) => {
         const file = folder.file.find((f) => f._id.toString() === id);
 
 
-        if (!file) {
+        if (!file || file.deleted) {
             return res.status(404).json({ message: 'File not found' });
         }
 
-        res.download(file.path, file.name);
+        // Documents hold personal data (ids, contracts): only the uploader, the
+        // employee in charge of the linked customer and admins may read them
+        const me = String(req.user.userId);
+        const allowed = isAdmin(req)
+            || String(folder.createBy) === me
+            || (file.linkContact && await Contact.exists({ _id: file.linkContact, createBy: me }))
+            || (file.linkLead && await Lead.exists({ _id: file.linkLead, createBy: me }));
+        if (!allowed) {
+            return res.status(404).json({ message: 'File not found' });
+        }
+
+        res.download(file.path, (err) => {
+            // The file was removed from the disk (e.g. uploads not persisted on redeploy)
+            if (err && !res.headersSent) {
+                res.status(404).json({ message: 'File not found' });
+            }
+        });
 
     } catch (error) {
         console.error(error.message);
@@ -139,9 +164,12 @@ const downloadFile = async (req, res) => {
 const deleteFile = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!isValidId(id)) {
+            return res.status(400).json({ message: 'Invalid file id' });
+        }
 
         // Check if the folder exists in the database
-        const folder = await DocumentSchema.findOne({ 'file._id': id });
+        const folder = await DocumentSchema.findOne({ 'file._id': id, ...ownerFilter(req) });
         if (!folder) {
             return res.status(404).json({ message: 'File not found' });
         }
@@ -169,11 +197,14 @@ const LinkDocument = async (req, res) => {
         let { linkContact, linkLead } = req.body
 
         if (!linkContact && !linkLead) {
-            return res.status(404).json({ message: 'Select valid contact or lead ' });
+            return res.status(400).json({ message: 'Select valid contact or lead ' });
+        }
+        if (!isValidId(id) || (linkContact && !isValidId(linkContact)) || (linkLead && !isValidId(linkLead))) {
+            return res.status(400).json({ message: 'Invalid id' });
         }
 
         // Check if the folder exists in the database
-        const folder = await DocumentSchema.findOne({ 'file._id': id });
+        const folder = await DocumentSchema.findOne({ 'file._id': id, ...ownerFilter(req) });
         if (!folder) {
             return res.status(404).json({ message: 'File not found' });
         }
